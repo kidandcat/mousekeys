@@ -153,8 +153,12 @@
         }
 
         .key.modifier {
-            width: 80px;
+            width: 72px;
             font-size: 0.9rem;
+        }
+
+        .key.shift {
+            width: 96px;
         }
 
         /* Features */
@@ -269,8 +273,12 @@
             }
 
             .key.modifier {
-                width: 64px;
-                font-size: 0.75rem;
+                width: 56px;
+                font-size: 0.7rem;
+            }
+
+            .key.shift {
+                width: 72px;
             }
 
             .keyboard {
@@ -305,20 +313,20 @@
 
         <section class="demo">
             <div class="keyboard">
-                <div class="key-row">
+                <div class="key-row" style="margin-left: 32px">
                     <div class="key">Q<span class="key-label">↖</span></div>
                     <div class="key active">W<span class="key-label">↑</span></div>
                     <div class="key">E<span class="key-label">↗</span></div>
                     <div class="key">R<span class="key-label">scroll↑</span></div>
                 </div>
-                <div class="key-row" style="margin-left: 16px">
+                <div class="key-row" style="margin-left: 48px">
                     <div class="key">A<span class="key-label">←</span></div>
                     <div class="key">S<span class="key-label">↓</span></div>
                     <div class="key">D<span class="key-label">→</span></div>
                     <div class="key">F<span class="key-label">scroll↓</span></div>
                 </div>
                 <div class="key-row">
-                    <div class="key modifier">Shift<span class="key-label">middle</span></div>
+                    <div class="key modifier shift">Shift<span class="key-label">middle</span></div>
                     <div class="key">Z<span class="key-label">↙</span></div>
                     <div class="key">X<span class="key-label">↘</span></div>
                 </div>
