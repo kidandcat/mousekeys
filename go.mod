@@ -3,17 +3,20 @@ module mousekeys
 go 1.25.5
 
 require (
+	github.com/go-vgo/robotgo v1.0.0
+	github.com/robotn/gohook v0.42.3
+)
+
+require (
 	github.com/dblohm7/wingoes v0.0.0-20250822163801-6d8e6105c62d // indirect
 	github.com/ebitengine/purego v0.9.1 // indirect
 	github.com/gen2brain/shm v0.1.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/go-vgo/robotgo v1.0.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.0 // indirect
 	github.com/jezek/xgb v1.2.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20251013123823-9fd1530e3ec3 // indirect
 	github.com/otiai10/gosseract/v2 v2.4.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/robotn/gohook v0.42.3 // indirect
 	github.com/robotn/xgb v0.10.0 // indirect
 	github.com/robotn/xgbutil v0.10.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.10 // indirect

@@ -11,11 +11,11 @@ import (
 )
 
 const (
-	baseSpeed    = 1.5  // Slower start for precision
+	baseSpeed    = 1.5
 	maxSpeed     = 50.0
-	accelTime    = 1.2  // Slightly longer to reach max
+	accelTime    = 1.2
 	tickInterval = 16 * time.Millisecond
-	scrollAmount = 15   // Scroll lines per press
+	scrollAmount = 15
 )
 
 // macOS key codes (rawcode)
@@ -199,7 +199,6 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 		return 0, 0
 	}
 
-	// Normalize direction for comparison
 	dirX, dirY := 0.0, 0.0
 	if dx > 0 {
 		dirX = 1
@@ -212,7 +211,6 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 		dirY = -1
 	}
 
-	// Reset acceleration if direction changed
 	if dirX != mc.lastDirX || dirY != mc.lastDirY {
 		mc.moveStartTime = time.Now()
 		mc.lastDirX, mc.lastDirY = dirX, dirY
@@ -241,7 +239,6 @@ func (mc *MouseController) RunLoop() {
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
-	// Get screen bounds
 	screenW, screenH := robotgo.GetScreenSize()
 
 	for range ticker.C {
@@ -254,7 +251,6 @@ func (mc *MouseController) RunLoop() {
 		newX := x + int(dx)
 		newY := y + int(dy)
 
-		// Clamp to screen bounds
 		if newX < 0 {
 			newX = 0
 		} else if newX >= screenW {
@@ -278,7 +274,6 @@ func main() {
 
 	go mc.RunLoop()
 
-	// Debounce Caps Lock - only toggle once per 300ms
 	var lastCapsLock time.Time
 	var capsLockMu sync.Mutex
 
@@ -299,7 +294,6 @@ func main() {
 
 	hook.Register(hook.KeyUp, []string{}, func(e hook.Event) {
 		if e.Rawcode == KeyCapsLock {
-			// Also check on KeyUp in case KeyDown was missed
 			capsLockMu.Lock()
 			if time.Since(lastCapsLock) > 300*time.Millisecond {
 				lastCapsLock = time.Now()
