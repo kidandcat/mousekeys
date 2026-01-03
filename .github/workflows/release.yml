@@ -9,27 +9,17 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-macos:
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-15
-            goos: darwin
             goarch: amd64
-            artifact: mousekeys-darwin-amd64
+            artifact: MouseKeys-darwin-amd64
           - os: macos-latest
-            goos: darwin
             goarch: arm64
-            artifact: mousekeys-darwin-arm64
-          - os: ubuntu-latest
-            goos: linux
-            goarch: amd64
-            artifact: mousekeys-linux-amd64
-          - os: windows-latest
-            goos: windows
-            goarch: amd64
-            artifact: mousekeys-windows-amd64.exe
+            artifact: MouseKeys-darwin-arm64
 
     runs-on: ${{ matrix.os }}
 
@@ -42,8 +32,69 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Install Linux dependencies
-        if: matrix.goos == 'linux'
+      - name: Build binary
+        env:
+          GOOS: darwin
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: go build -ldflags="-s -w" -o mousekeys
+
+      - name: Create .app bundle
+        run: |
+          mkdir -p MouseKeys.app/Contents/{MacOS,Resources}
+          cp mousekeys MouseKeys.app/Contents/MacOS/
+          chmod +x MouseKeys.app/Contents/MacOS/mousekeys
+          cat > MouseKeys.app/Contents/Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleName</key>
+              <string>MouseKeys</string>
+              <key>CFBundleDisplayName</key>
+              <string>MouseKeys</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.kidandcat.mousekeys</string>
+              <key>CFBundleVersion</key>
+              <string>${GITHUB_REF_NAME#v}</string>
+              <key>CFBundleShortVersionString</key>
+              <string>${GITHUB_REF_NAME#v}</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleExecutable</key>
+              <string>mousekeys</string>
+              <key>CFBundleIconFile</key>
+              <string>AppIcon</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>10.13</string>
+              <key>LSUIElement</key>
+              <true/>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          zip -r ${{ matrix.artifact }}.zip MouseKeys.app
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -61,20 +112,40 @@ jobs:
 
       - name: Build
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
-        run: |
-          go build -ldflags="-s -w" -o ${{ matrix.artifact }}
+        run: go build -ldflags="-s -w" -o mousekeys-linux-amd64
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          name: mousekeys-linux-amd64
+          path: mousekeys-linux-amd64
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build
+        env:
+          CGO_ENABLED: 1
+        run: go build -ldflags="-s -w" -o mousekeys-windows-amd64.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mousekeys-windows-amd64.exe
+          path: mousekeys-windows-amd64.exe
 
   release:
-    needs: build
+    needs: [build-macos, build-linux, build-windows]
     runs-on: ubuntu-latest
 
     steps:
