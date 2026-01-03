@@ -116,7 +116,7 @@
 
         .key-row {
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             gap: 8px;
             margin-bottom: 8px;
         }
@@ -309,23 +309,21 @@
                     <div class="key">Q<span class="key-label">↖</span></div>
                     <div class="key active">W<span class="key-label">↑</span></div>
                     <div class="key">E<span class="key-label">↗</span></div>
-                    <div class="key" style="margin-left: 40px">R<span class="key-label">scroll↑</span></div>
+                    <div class="key">R<span class="key-label">scroll↑</span></div>
                 </div>
-                <div class="key-row">
+                <div class="key-row" style="margin-left: 16px">
                     <div class="key">A<span class="key-label">←</span></div>
                     <div class="key">S<span class="key-label">↓</span></div>
                     <div class="key">D<span class="key-label">→</span></div>
-                    <div class="key" style="margin-left: 40px">F<span class="key-label">scroll↓</span></div>
+                    <div class="key">F<span class="key-label">scroll↓</span></div>
                 </div>
                 <div class="key-row">
+                    <div class="key modifier">Shift<span class="key-label">middle</span></div>
                     <div class="key">Z<span class="key-label">↙</span></div>
                     <div class="key">X<span class="key-label">↘</span></div>
                 </div>
-                <div class="key-row" style="margin-top: 16px">
-                    <div class="key modifier">Ctrl<span class="key-label">right click</span></div>
-                    <div class="key modifier">Shift<span class="key-label">middle click</span></div>
-                </div>
-                <div class="key-row" style="margin-top: 8px">
+                <div class="key-row">
+                    <div class="key modifier">Ctrl<span class="key-label">right</span></div>
                     <div class="key space">Space<span class="key-label">left click / drag</span></div>
                 </div>
             </div>
