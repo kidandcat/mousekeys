@@ -1,44 +1,9 @@
 package main
 
-/*
-#cgo CFLAGS: -x objective-c
-#cgo LDFLAGS: -framework CoreGraphics -framework CoreFoundation
-
-#include <CoreGraphics/CoreGraphics.h>
-#include <CoreFoundation/CoreFoundation.h>
-
-extern CGEventRef eventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon);
-
-static CFMachPortRef createEventTap() {
-    CGEventMask mask = (1 << kCGEventKeyDown) | (1 << kCGEventKeyUp) | (1 << kCGEventFlagsChanged);
-    CFMachPortRef tap = CGEventTapCreate(
-        kCGSessionEventTap,
-        kCGHeadInsertEventTap,
-        kCGEventTapOptionDefault,
-        mask,
-        eventCallback,
-        NULL
-    );
-    return tap;
-}
-
-static void runEventTap(CFMachPortRef tap) {
-    CFRunLoopSourceRef source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0);
-    CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes);
-    CGEventTapEnable(tap, true);
-    CFRunLoopRun();
-}
-*/
-import "C"
-
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/getlantern/systray"
 	"github.com/go-vgo/robotgo"
@@ -49,25 +14,7 @@ const (
 	maxSpeed     = 100.0
 	accelTime    = 1.2
 	tickInterval = 16 * time.Millisecond
-	scrollAmount = 15
-)
-
-// macOS key codes
-const (
-	KeyCapsLock = 57
-	KeyW        = 13
-	KeyA        = 0
-	KeyS        = 1
-	KeyD        = 2
-	KeyQ        = 12
-	KeyE        = 14
-	KeyZ        = 6
-	KeyX        = 7
-	KeyR        = 15
-	KeyF        = 3
-	KeySpace    = 49
-	KeyLCtrl    = 59
-	KeyLShift   = 56
+	scrollAmount = 50
 )
 
 type MouseController struct {
@@ -84,9 +31,9 @@ type MouseController struct {
 }
 
 var (
-	mc              *MouseController
-	lastCapsLock    time.Time
-	capsLockMu      sync.Mutex
+	mc        *MouseController
+	hook      KeyboardHook
+	autostart Autostart
 )
 
 func NewMouseController() *MouseController {
@@ -116,7 +63,8 @@ func (mc *MouseController) IsActive() bool {
 	return mc.active
 }
 
-func (mc *MouseController) HandleKeyDown(keycode int64) bool {
+// HandleKeyDownByKey processes a key press using the unified Key type
+func (mc *MouseController) HandleKeyDownByKey(key Key) bool {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
@@ -124,48 +72,55 @@ func (mc *MouseController) HandleKeyDown(keycode int64) bool {
 		return false
 	}
 
-	switch keycode {
-	case KeyW:
+	switch key {
+	case KeyMoveUp:
 		mc.keyW = true
 		return true
-	case KeyA:
+	case KeyMoveLeft:
 		mc.keyA = true
 		return true
-	case KeyS:
+	case KeyMoveDown:
 		mc.keyS = true
 		return true
-	case KeyD:
+	case KeyMoveRight:
 		mc.keyD = true
 		return true
-	case KeyQ:
+	case KeyDiagUpLeft:
 		mc.keyQ = true
 		return true
-	case KeyE:
+	case KeyDiagUpRight:
 		mc.keyE = true
 		return true
-	case KeyZ:
+	case KeyDiagDownLeft:
 		mc.keyZ = true
 		return true
-	case KeyX:
+	case KeyDiagDownRight:
 		mc.keyX = true
 		return true
-	case KeySpace:
+	case KeyLeftClick:
 		if !mc.leftDown {
 			robotgo.Toggle("left", "down")
 			mc.leftDown = true
 		}
 		return true
-	case KeyR:
+	case KeyRightClick:
+		robotgo.Click("right", false)
+		return true
+	case KeyMiddleClick:
+		robotgo.Click("center", false)
+		return true
+	case KeyScrollUp:
 		robotgo.Scroll(0, scrollAmount)
 		return true
-	case KeyF:
+	case KeyScrollDown:
 		robotgo.Scroll(0, -scrollAmount)
 		return true
 	}
 	return false
 }
 
-func (mc *MouseController) HandleKeyUp(keycode int64) bool {
+// HandleKeyUpByKey processes a key release using the unified Key type
+func (mc *MouseController) HandleKeyUpByKey(key Key) bool {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
@@ -173,43 +128,92 @@ func (mc *MouseController) HandleKeyUp(keycode int64) bool {
 		return false
 	}
 
-	switch keycode {
-	case KeyW:
+	switch key {
+	case KeyMoveUp:
 		mc.keyW = false
 		return true
-	case KeyA:
+	case KeyMoveLeft:
 		mc.keyA = false
 		return true
-	case KeyS:
+	case KeyMoveDown:
 		mc.keyS = false
 		return true
-	case KeyD:
+	case KeyMoveRight:
 		mc.keyD = false
 		return true
-	case KeyQ:
+	case KeyDiagUpLeft:
 		mc.keyQ = false
 		return true
-	case KeyE:
+	case KeyDiagUpRight:
 		mc.keyE = false
 		return true
-	case KeyZ:
+	case KeyDiagDownLeft:
 		mc.keyZ = false
 		return true
-	case KeyX:
+	case KeyDiagDownRight:
 		mc.keyX = false
 		return true
-	case KeySpace:
+	case KeyLeftClick:
 		if mc.leftDown {
 			robotgo.Toggle("left", "up")
 			mc.leftDown = false
 		}
 		return true
-	case KeyR:
-		return true
-	case KeyF:
+	case KeyRightClick, KeyMiddleClick, KeyScrollUp, KeyScrollDown:
 		return true
 	}
 	return false
+}
+
+// Legacy HandleKeyDown for backward compatibility with tests (uses raw keycodes)
+// This will be removed once all platforms are implemented
+func (mc *MouseController) HandleKeyDown(keycode int64) bool {
+	// Map legacy macOS keycodes to unified keys for backward compatibility
+	key := legacyKeycodeToKey(keycode)
+	return mc.HandleKeyDownByKey(key)
+}
+
+// Legacy HandleKeyUp for backward compatibility with tests
+func (mc *MouseController) HandleKeyUp(keycode int64) bool {
+	key := legacyKeycodeToKey(keycode)
+	return mc.HandleKeyUpByKey(key)
+}
+
+// legacyKeycodeToKey maps old macOS keycodes to unified Key type
+// This maintains backward compatibility with existing tests
+func legacyKeycodeToKey(keycode int64) Key {
+	switch keycode {
+	case 57: // CapsLock
+		return KeyToggle
+	case 13: // W
+		return KeyMoveUp
+	case 1: // S
+		return KeyMoveDown
+	case 0: // A
+		return KeyMoveLeft
+	case 2: // D
+		return KeyMoveRight
+	case 12: // Q
+		return KeyDiagUpLeft
+	case 14: // E
+		return KeyDiagUpRight
+	case 6: // Z
+		return KeyDiagDownLeft
+	case 7: // X
+		return KeyDiagDownRight
+	case 49: // Space
+		return KeyLeftClick
+	case 59: // LCtrl
+		return KeyRightClick
+	case 56: // LShift
+		return KeyMiddleClick
+	case 15: // R
+		return KeyScrollUp
+	case 3: // F
+		return KeyScrollDown
+	default:
+		return KeyUnknown
+	}
 }
 
 func (mc *MouseController) GetMovement() (dx, dy float64) {
@@ -322,136 +326,21 @@ func (mc *MouseController) RunLoop() {
 	}
 }
 
-//export eventCallback
-func eventCallback(proxy C.CGEventTapProxy, eventType C.CGEventType, event C.CGEventRef, refcon unsafe.Pointer) C.CGEventRef {
-	keycode := int64(C.CGEventGetIntegerValueField(event, C.kCGKeyboardEventKeycode))
-
-	// Handle modifier keys via flags changed event
-	if eventType == C.kCGEventFlagsChanged {
-		if keycode == KeyCapsLock {
-			capsLockMu.Lock()
-			if time.Since(lastCapsLock) > 300*time.Millisecond {
-				lastCapsLock = time.Now()
-				capsLockMu.Unlock()
-				mc.Toggle()
-			} else {
-				capsLockMu.Unlock()
-			}
-			return event
+// processKeyEvent handles incoming keyboard events from the hook
+func processKeyEvent(evt KeyEvent) {
+	switch evt.EventType {
+	case FlagsChanged:
+		if evt.Keycode == KeyToggle {
+			mc.Toggle()
+		} else if evt.Keycode == KeyRightClick || evt.Keycode == KeyMiddleClick {
+			// These are handled in the hook for macOS (need flags check)
+			mc.HandleKeyDownByKey(evt.Keycode)
 		}
-
-		// Handle Ctrl and Shift when active
-		if mc.IsActive() {
-			flags := uint64(C.CGEventGetFlags(event))
-
-			if keycode == KeyLCtrl {
-				if flags&(1<<18) != 0 { // Ctrl pressed
-					robotgo.Click("right", false)
-				}
-				return C.CGEventRef(0)
-			}
-			if keycode == KeyLShift {
-				if flags&(1<<17) != 0 { // Shift pressed
-					robotgo.Click("center", false)
-				}
-				return C.CGEventRef(0)
-			}
-		}
-		return event
+	case KeyDown:
+		mc.HandleKeyDownByKey(evt.Keycode)
+	case KeyUp:
+		mc.HandleKeyUpByKey(evt.Keycode)
 	}
-
-	// Handle other keys when active
-	if eventType == C.kCGEventKeyDown {
-		if mc.HandleKeyDown(keycode) {
-			return C.CGEventRef(0) // Suppress event
-		}
-	} else if eventType == C.kCGEventKeyUp {
-		if mc.HandleKeyUp(keycode) {
-			return C.CGEventRef(0) // Suppress event
-		}
-	}
-
-	return event
-}
-
-func startEventTap() {
-	tap := C.createEventTap()
-	if tap == C.CFMachPortRef(0) {
-		fmt.Println("Failed to create event tap. Make sure Accessibility permissions are granted.")
-		return
-	}
-	C.runEventTap(tap)
-}
-
-func getLaunchAgentPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "Library", "LaunchAgents", "com.mousekeys.app.plist")
-}
-
-func getAppPath() string {
-	exe, _ := os.Executable()
-	// If running from .app bundle, return the .app path
-	// exe will be like /Applications/MouseKeys.app/Contents/MacOS/mousekeys
-	if idx := strings.Index(exe, ".app/"); idx != -1 {
-		return exe[:idx+4] // Include ".app"
-	}
-	return exe
-}
-
-func isRunOnLoginEnabled() bool {
-	_, err := os.Stat(getLaunchAgentPath())
-	return err == nil
-}
-
-func enableRunOnLogin() error {
-	appPath := getAppPath()
-	var plist string
-
-	if strings.HasSuffix(appPath, ".app") {
-		// Use open command for .app bundles
-		plist = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.mousekeys.app</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/bin/open</string>
-        <string>-a</string>
-        <string>%s</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <false/>
-</dict>
-</plist>`, appPath)
-	} else {
-		// Direct binary execution
-		plist = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.mousekeys.app</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>%s</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <false/>
-</dict>
-</plist>`, appPath)
-	}
-
-	return os.WriteFile(getLaunchAgentPath(), []byte(plist), 0644)
-}
-
-func disableRunOnLogin() error {
-	return os.Remove(getLaunchAgentPath())
 }
 
 func onReady() {
@@ -462,7 +351,7 @@ func onReady() {
 	mStatus.Disable()
 	systray.AddSeparator()
 	mRunOnLogin := systray.AddMenuItem("Run on Login", "Start MouseKeys when you log in")
-	if isRunOnLoginEnabled() {
+	if autostart.IsEnabled() {
 		mRunOnLogin.Check()
 	}
 	systray.AddSeparator()
@@ -485,10 +374,10 @@ func onReady() {
 		for {
 			<-mRunOnLogin.ClickedCh
 			if mRunOnLogin.Checked() {
-				disableRunOnLogin()
+				autostart.Disable()
 				mRunOnLogin.Uncheck()
 			} else {
-				enableRunOnLogin()
+				autostart.Enable()
 				mRunOnLogin.Check()
 			}
 		}
@@ -500,16 +389,34 @@ func onReady() {
 	}()
 }
 
-func onExit() {}
+func onExit() {
+	if hook != nil {
+		hook.Stop()
+	}
+}
 
 func main() {
 	fmt.Println("MouseKeys - Caps Lock to toggle")
 	fmt.Println("WASD/QEZX=move, Space=click, Ctrl=right, Shift=middle, R/F=scroll")
 
 	mc = NewMouseController()
+	hook = NewKeyboardHook()
+	autostart = NewAutostart()
 
 	go mc.RunLoop()
-	go startEventTap()
+
+	// Start keyboard hook and process events
+	events, err := hook.Start()
+	if err != nil {
+		fmt.Printf("Failed to start keyboard hook: %v\n", err)
+		return
+	}
+
+	go func() {
+		for evt := range events {
+			processKeyEvent(evt)
+		}
+	}()
 
 	systray.Run(onReady, onExit)
 }
