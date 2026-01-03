@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	baseSpeed    = 3.0
+	baseSpeed    = 1.5  // Slower start for precision
 	maxSpeed     = 50.0
-	accelTime    = 1.0
+	accelTime    = 1.2  // Slightly longer to reach max
 	tickInterval = 16 * time.Millisecond
+	scrollAmount = 15   // Scroll lines per press
 )
 
 // macOS key codes (rawcode)
@@ -39,6 +40,8 @@ type MouseController struct {
 	mu            sync.Mutex
 	active        bool
 	moveStartTime time.Time
+	lastDirX      float64
+	lastDirY      float64
 
 	keyW, keyA, keyS, keyD bool
 	keyQ, keyE, keyZ, keyX bool
@@ -114,9 +117,9 @@ func (mc *MouseController) HandleKeyDown(keycode uint16) {
 	case KeyLShift:
 		robotgo.Click("center", false)
 	case KeyR:
-		robotgo.Scroll(0, 5)
+		robotgo.Scroll(0, scrollAmount)
 	case KeyF:
-		robotgo.Scroll(0, -5)
+		robotgo.Scroll(0, -scrollAmount)
 	}
 }
 
@@ -192,7 +195,27 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 
 	if dx == 0 && dy == 0 {
 		mc.moveStartTime = time.Time{}
+		mc.lastDirX, mc.lastDirY = 0, 0
 		return 0, 0
+	}
+
+	// Normalize direction for comparison
+	dirX, dirY := 0.0, 0.0
+	if dx > 0 {
+		dirX = 1
+	} else if dx < 0 {
+		dirX = -1
+	}
+	if dy > 0 {
+		dirY = 1
+	} else if dy < 0 {
+		dirY = -1
+	}
+
+	// Reset acceleration if direction changed
+	if dirX != mc.lastDirX || dirY != mc.lastDirY {
+		mc.moveStartTime = time.Now()
+		mc.lastDirX, mc.lastDirY = dirX, dirY
 	}
 
 	if mc.moveStartTime.IsZero() {
@@ -218,27 +241,32 @@ func (mc *MouseController) RunLoop() {
 	ticker := time.NewTicker(tickInterval)
 	defer ticker.Stop()
 
-	var accumX, accumY float64
+	// Get screen bounds
+	screenW, screenH := robotgo.GetScreenSize()
 
 	for range ticker.C {
 		dx, dy := mc.GetMovement()
 		if dx == 0 && dy == 0 {
-			accumX, accumY = 0, 0
 			continue
 		}
 
-		accumX += dx
-		accumY += dy
+		x, y := robotgo.Location()
+		newX := x + int(dx)
+		newY := y + int(dy)
 
-		moveX := int(accumX)
-		moveY := int(accumY)
-
-		if moveX != 0 || moveY != 0 {
-			x, y := robotgo.Location()
-			robotgo.Move(x+moveX, y+moveY)
-			accumX -= float64(moveX)
-			accumY -= float64(moveY)
+		// Clamp to screen bounds
+		if newX < 0 {
+			newX = 0
+		} else if newX >= screenW {
+			newX = screenW - 1
 		}
+		if newY < 0 {
+			newY = 0
+		} else if newY >= screenH {
+			newY = screenH - 1
+		}
+
+		robotgo.Move(newX, newY)
 	}
 }
 
