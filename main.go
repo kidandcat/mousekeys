@@ -33,6 +33,9 @@ import "C"
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -42,8 +45,8 @@ import (
 )
 
 const (
-	baseSpeed    = 1.5
-	maxSpeed     = 50.0
+	baseSpeed    = 1.0
+	maxSpeed     = 100.0
 	accelTime    = 1.2
 	tickInterval = 16 * time.Millisecond
 	scrollAmount = 15
@@ -152,12 +155,6 @@ func (mc *MouseController) HandleKeyDown(keycode int64) bool {
 			mc.leftDown = true
 		}
 		return true
-	case KeyLCtrl:
-		robotgo.Click("right", false)
-		return true
-	case KeyLShift:
-		robotgo.Click("center", false)
-		return true
 	case KeyR:
 		robotgo.Scroll(0, scrollAmount)
 		return true
@@ -206,10 +203,6 @@ func (mc *MouseController) HandleKeyUp(keycode int64) bool {
 			robotgo.Toggle("left", "up")
 			mc.leftDown = false
 		}
-		return true
-	case KeyLCtrl:
-		return true
-	case KeyLShift:
 		return true
 	case KeyR:
 		return true
@@ -333,15 +326,36 @@ func (mc *MouseController) RunLoop() {
 func eventCallback(proxy C.CGEventTapProxy, eventType C.CGEventType, event C.CGEventRef, refcon unsafe.Pointer) C.CGEventRef {
 	keycode := int64(C.CGEventGetIntegerValueField(event, C.kCGKeyboardEventKeycode))
 
-	// Handle Caps Lock via flags changed event
-	if eventType == C.kCGEventFlagsChanged && keycode == KeyCapsLock {
-		capsLockMu.Lock()
-		if time.Since(lastCapsLock) > 300*time.Millisecond {
-			lastCapsLock = time.Now()
-			capsLockMu.Unlock()
-			mc.Toggle()
-		} else {
-			capsLockMu.Unlock()
+	// Handle modifier keys via flags changed event
+	if eventType == C.kCGEventFlagsChanged {
+		if keycode == KeyCapsLock {
+			capsLockMu.Lock()
+			if time.Since(lastCapsLock) > 300*time.Millisecond {
+				lastCapsLock = time.Now()
+				capsLockMu.Unlock()
+				mc.Toggle()
+			} else {
+				capsLockMu.Unlock()
+			}
+			return event
+		}
+
+		// Handle Ctrl and Shift when active
+		if mc.IsActive() {
+			flags := uint64(C.CGEventGetFlags(event))
+
+			if keycode == KeyLCtrl {
+				if flags&(1<<18) != 0 { // Ctrl pressed
+					robotgo.Click("right", false)
+				}
+				return C.CGEventRef(0)
+			}
+			if keycode == KeyLShift {
+				if flags&(1<<17) != 0 { // Shift pressed
+					robotgo.Click("center", false)
+				}
+				return C.CGEventRef(0)
+			}
 		}
 		return event
 	}
@@ -369,12 +383,88 @@ func startEventTap() {
 	C.runEventTap(tap)
 }
 
+func getLaunchAgentPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, "Library", "LaunchAgents", "com.mousekeys.app.plist")
+}
+
+func getAppPath() string {
+	exe, _ := os.Executable()
+	// If running from .app bundle, return the .app path
+	// exe will be like /Applications/MouseKeys.app/Contents/MacOS/mousekeys
+	if idx := strings.Index(exe, ".app/"); idx != -1 {
+		return exe[:idx+4] // Include ".app"
+	}
+	return exe
+}
+
+func isRunOnLoginEnabled() bool {
+	_, err := os.Stat(getLaunchAgentPath())
+	return err == nil
+}
+
+func enableRunOnLogin() error {
+	appPath := getAppPath()
+	var plist string
+
+	if strings.HasSuffix(appPath, ".app") {
+		// Use open command for .app bundles
+		plist = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mousekeys.app</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/open</string>
+        <string>-a</string>
+        <string>%s</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>`, appPath)
+	} else {
+		// Direct binary execution
+		plist = fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mousekeys.app</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>%s</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>`, appPath)
+	}
+
+	return os.WriteFile(getLaunchAgentPath(), []byte(plist), 0644)
+}
+
+func disableRunOnLogin() error {
+	return os.Remove(getLaunchAgentPath())
+}
+
 func onReady() {
 	systray.SetTitle("⌨️")
 	systray.SetTooltip("MouseKeys - Caps Lock to toggle")
 
 	mStatus := systray.AddMenuItem("Inactive", "Current status")
 	mStatus.Disable()
+	systray.AddSeparator()
+	mRunOnLogin := systray.AddMenuItem("Run on Login", "Start MouseKeys when you log in")
+	if isRunOnLoginEnabled() {
+		mRunOnLogin.Check()
+	}
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Quit MouseKeys")
 
@@ -387,6 +477,19 @@ func onReady() {
 			} else {
 				mStatus.SetTitle("○ Inactive")
 				systray.SetTitle("⌨️")
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			<-mRunOnLogin.ClickedCh
+			if mRunOnLogin.Checked() {
+				disableRunOnLogin()
+				mRunOnLogin.Uncheck()
+			} else {
+				enableRunOnLogin()
+				mRunOnLogin.Check()
 			}
 		}
 	}()
