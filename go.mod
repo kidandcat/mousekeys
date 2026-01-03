@@ -3,8 +3,8 @@ module mousekeys
 go 1.25.5
 
 require (
+	github.com/getlantern/systray v1.2.2
 	github.com/go-vgo/robotgo v1.0.0
-	github.com/robotn/gohook v0.42.3
 )
 
 require (
@@ -17,7 +17,6 @@ require (
 	github.com/getlantern/hex v0.0.0-20190417191902-c6586a6fe0b7 // indirect
 	github.com/getlantern/hidden v0.0.0-20190325191715-f02dbb02be55 // indirect
 	github.com/getlantern/ops v0.0.0-20190325191751-d70cb0d6f85f // indirect
-	github.com/getlantern/systray v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.0 // indirect

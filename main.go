@@ -1,14 +1,44 @@
 package main
 
+/*
+#cgo CFLAGS: -x objective-c
+#cgo LDFLAGS: -framework CoreGraphics -framework CoreFoundation
+
+#include <CoreGraphics/CoreGraphics.h>
+#include <CoreFoundation/CoreFoundation.h>
+
+extern CGEventRef eventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon);
+
+static CFMachPortRef createEventTap() {
+    CGEventMask mask = (1 << kCGEventKeyDown) | (1 << kCGEventKeyUp) | (1 << kCGEventFlagsChanged);
+    CFMachPortRef tap = CGEventTapCreate(
+        kCGSessionEventTap,
+        kCGHeadInsertEventTap,
+        kCGEventTapOptionDefault,
+        mask,
+        eventCallback,
+        NULL
+    );
+    return tap;
+}
+
+static void runEventTap(CFMachPortRef tap) {
+    CFRunLoopSourceRef source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0);
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), source, kCFRunLoopCommonModes);
+    CGEventTapEnable(tap, true);
+    CFRunLoopRun();
+}
+*/
+import "C"
+
 import (
 	"fmt"
-	"os/exec"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/getlantern/systray"
 	"github.com/go-vgo/robotgo"
-	hook "github.com/robotn/gohook"
 )
 
 const (
@@ -19,7 +49,7 @@ const (
 	scrollAmount = 15
 )
 
-// macOS key codes (rawcode)
+// macOS key codes
 const (
 	KeyCapsLock = 57
 	KeyW        = 13
@@ -50,6 +80,12 @@ type MouseController struct {
 	leftDown bool
 }
 
+var (
+	mc              *MouseController
+	lastCapsLock    time.Time
+	capsLockMu      sync.Mutex
+)
+
 func NewMouseController() *MouseController {
 	return &MouseController{}
 }
@@ -61,12 +97,6 @@ func (mc *MouseController) Toggle() {
 	mc.active = !mc.active
 	if mc.active {
 		mc.moveStartTime = time.Time{}
-		// Steal focus using AppleScript
-		go func() {
-			exec.Command("osascript", "-e", `tell application "Finder" to activate`).Run()
-			time.Sleep(50 * time.Millisecond)
-			robotgo.KeyTap("escape")
-		}()
 	} else {
 		if mc.leftDown {
 			robotgo.Toggle("left", "up")
@@ -83,78 +113,110 @@ func (mc *MouseController) IsActive() bool {
 	return mc.active
 }
 
-func (mc *MouseController) HandleKeyDown(keycode uint16) {
+func (mc *MouseController) HandleKeyDown(keycode int64) bool {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
 	if !mc.active {
-		return
+		return false
 	}
 
 	switch keycode {
 	case KeyW:
 		mc.keyW = true
+		return true
 	case KeyA:
 		mc.keyA = true
+		return true
 	case KeyS:
 		mc.keyS = true
+		return true
 	case KeyD:
 		mc.keyD = true
+		return true
 	case KeyQ:
 		mc.keyQ = true
+		return true
 	case KeyE:
 		mc.keyE = true
+		return true
 	case KeyZ:
 		mc.keyZ = true
+		return true
 	case KeyX:
 		mc.keyX = true
+		return true
 	case KeySpace:
 		if !mc.leftDown {
 			robotgo.Toggle("left", "down")
 			mc.leftDown = true
 		}
+		return true
 	case KeyLCtrl:
 		robotgo.Click("right", false)
+		return true
 	case KeyLShift:
 		robotgo.Click("center", false)
+		return true
 	case KeyR:
 		robotgo.Scroll(0, scrollAmount)
+		return true
 	case KeyF:
 		robotgo.Scroll(0, -scrollAmount)
+		return true
 	}
+	return false
 }
 
-func (mc *MouseController) HandleKeyUp(keycode uint16) {
+func (mc *MouseController) HandleKeyUp(keycode int64) bool {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
 	if !mc.active {
-		return
+		return false
 	}
 
 	switch keycode {
 	case KeyW:
 		mc.keyW = false
+		return true
 	case KeyA:
 		mc.keyA = false
+		return true
 	case KeyS:
 		mc.keyS = false
+		return true
 	case KeyD:
 		mc.keyD = false
+		return true
 	case KeyQ:
 		mc.keyQ = false
+		return true
 	case KeyE:
 		mc.keyE = false
+		return true
 	case KeyZ:
 		mc.keyZ = false
+		return true
 	case KeyX:
 		mc.keyX = false
+		return true
 	case KeySpace:
 		if mc.leftDown {
 			robotgo.Toggle("left", "up")
 			mc.leftDown = false
 		}
+		return true
+	case KeyLCtrl:
+		return true
+	case KeyLShift:
+		return true
+	case KeyR:
+		return true
+	case KeyF:
+		return true
 	}
+	return false
 }
 
 func (mc *MouseController) GetMovement() (dx, dy float64) {
@@ -267,7 +329,45 @@ func (mc *MouseController) RunLoop() {
 	}
 }
 
-var mc *MouseController
+//export eventCallback
+func eventCallback(proxy C.CGEventTapProxy, eventType C.CGEventType, event C.CGEventRef, refcon unsafe.Pointer) C.CGEventRef {
+	keycode := int64(C.CGEventGetIntegerValueField(event, C.kCGKeyboardEventKeycode))
+
+	// Handle Caps Lock via flags changed event
+	if eventType == C.kCGEventFlagsChanged && keycode == KeyCapsLock {
+		capsLockMu.Lock()
+		if time.Since(lastCapsLock) > 300*time.Millisecond {
+			lastCapsLock = time.Now()
+			capsLockMu.Unlock()
+			mc.Toggle()
+		} else {
+			capsLockMu.Unlock()
+		}
+		return event
+	}
+
+	// Handle other keys when active
+	if eventType == C.kCGEventKeyDown {
+		if mc.HandleKeyDown(keycode) {
+			return C.CGEventRef(0) // Suppress event
+		}
+	} else if eventType == C.kCGEventKeyUp {
+		if mc.HandleKeyUp(keycode) {
+			return C.CGEventRef(0) // Suppress event
+		}
+	}
+
+	return event
+}
+
+func startEventTap() {
+	tap := C.createEventTap()
+	if tap == C.CFMachPortRef(0) {
+		fmt.Println("Failed to create event tap. Make sure Accessibility permissions are granted.")
+		return
+	}
+	C.runEventTap(tap)
+}
 
 func onReady() {
 	systray.SetTitle("⌨️")
@@ -278,7 +378,6 @@ func onReady() {
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("Quit", "Quit MouseKeys")
 
-	// Update status when toggled
 	go func() {
 		for {
 			time.Sleep(100 * time.Millisecond)
@@ -298,47 +397,7 @@ func onReady() {
 	}()
 }
 
-func onExit() {
-	// Cleanup
-}
-
-func startHooks() {
-	var lastCapsLock time.Time
-	var capsLockMu sync.Mutex
-
-	hook.Register(hook.KeyDown, []string{}, func(e hook.Event) {
-		if e.Rawcode == KeyCapsLock {
-			capsLockMu.Lock()
-			if time.Since(lastCapsLock) > 300*time.Millisecond {
-				lastCapsLock = time.Now()
-				capsLockMu.Unlock()
-				mc.Toggle()
-			} else {
-				capsLockMu.Unlock()
-			}
-			return
-		}
-		mc.HandleKeyDown(e.Rawcode)
-	})
-
-	hook.Register(hook.KeyUp, []string{}, func(e hook.Event) {
-		if e.Rawcode == KeyCapsLock {
-			capsLockMu.Lock()
-			if time.Since(lastCapsLock) > 300*time.Millisecond {
-				lastCapsLock = time.Now()
-				capsLockMu.Unlock()
-				mc.Toggle()
-			} else {
-				capsLockMu.Unlock()
-			}
-			return
-		}
-		mc.HandleKeyUp(e.Rawcode)
-	})
-
-	s := hook.Start()
-	<-hook.Process(s)
-}
+func onExit() {}
 
 func main() {
 	fmt.Println("MouseKeys - Caps Lock to toggle")
@@ -347,7 +406,7 @@ func main() {
 	mc = NewMouseController()
 
 	go mc.RunLoop()
-	go startHooks()
+	go startEventTap()
 
 	systray.Run(onReady, onExit)
 }
