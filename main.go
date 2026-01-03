@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getlantern/systray"
 	"github.com/go-vgo/robotgo"
 	hook "github.com/robotn/gohook"
 )
@@ -266,14 +267,42 @@ func (mc *MouseController) RunLoop() {
 	}
 }
 
-func main() {
-	fmt.Println("MouseKeys - Caps Lock to toggle")
-	fmt.Println("WASD/QEZX=move, Space=click, Ctrl=right, Shift=middle, R/F=scroll")
+var mc *MouseController
 
-	mc := NewMouseController()
+func onReady() {
+	systray.SetTitle("⌨️")
+	systray.SetTooltip("MouseKeys - Caps Lock to toggle")
 
-	go mc.RunLoop()
+	mStatus := systray.AddMenuItem("Inactive", "Current status")
+	mStatus.Disable()
+	systray.AddSeparator()
+	mQuit := systray.AddMenuItem("Quit", "Quit MouseKeys")
 
+	// Update status when toggled
+	go func() {
+		for {
+			time.Sleep(100 * time.Millisecond)
+			if mc.IsActive() {
+				mStatus.SetTitle("● Active")
+				systray.SetTitle("🖱️")
+			} else {
+				mStatus.SetTitle("○ Inactive")
+				systray.SetTitle("⌨️")
+			}
+		}
+	}()
+
+	go func() {
+		<-mQuit.ClickedCh
+		systray.Quit()
+	}()
+}
+
+func onExit() {
+	// Cleanup
+}
+
+func startHooks() {
 	var lastCapsLock time.Time
 	var capsLockMu sync.Mutex
 
@@ -309,4 +338,16 @@ func main() {
 
 	s := hook.Start()
 	<-hook.Process(s)
+}
+
+func main() {
+	fmt.Println("MouseKeys - Caps Lock to toggle")
+	fmt.Println("WASD/QEZX=move, Space=click, Ctrl=right, Shift=middle, R/F=scroll")
+
+	mc = NewMouseController()
+
+	go mc.RunLoop()
+	go startHooks()
+
+	systray.Run(onReady, onExit)
 }
