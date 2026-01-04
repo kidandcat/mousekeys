@@ -38,33 +38,28 @@
 
         /* Hero */
         .hero {
-            padding: 80px 0 40px;
+            padding: 20px 0 16px;
             text-align: center;
         }
 
-        .hero-icon {
-            font-size: 72px;
-            margin-bottom: 24px;
-            display: block;
-        }
-
         h1 {
-            font-size: 3.5rem;
+            font-size: 2rem;
             font-weight: 700;
             letter-spacing: -0.02em;
-            margin-bottom: 16px;
+            margin-bottom: 8px;
+            display: inline;
         }
 
         .tagline {
-            font-size: 1.25rem;
+            font-size: 1rem;
             color: var(--text-muted);
             max-width: 500px;
-            margin: 0 auto 40px;
+            margin: 0 auto 16px;
         }
 
         .cta-buttons {
             display: flex;
-            gap: 16px;
+            gap: 12px;
             justify-content: center;
             flex-wrap: wrap;
         }
@@ -72,10 +67,10 @@
         .btn {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 14px 28px;
+            gap: 6px;
+            padding: 10px 20px;
             border-radius: 8px;
-            font-size: 1rem;
+            font-size: 0.9rem;
             font-weight: 500;
             text-decoration: none;
             transition: all 0.2s;
@@ -102,23 +97,23 @@
 
         /* Demo */
         .demo {
-            padding: 40px 0 60px;
+            padding: 20px 0 16px;
         }
 
         .demo-container {
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 32px;
-            max-width: 700px;
+            padding: 20px;
+            max-width: 600px;
             margin: 0 auto;
         }
 
         .demo-hint {
             text-align: center;
             color: var(--text-muted);
-            font-size: 0.9rem;
-            margin-bottom: 20px;
+            font-size: 0.8rem;
+            margin-bottom: 12px;
         }
 
         .demo-hint kbd {
@@ -127,16 +122,16 @@
             border-radius: 4px;
             padding: 2px 6px;
             font-family: inherit;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
         }
 
         /* Mouse Area */
         .mouse-area {
             position: relative;
-            height: 200px;
+            height: 160px;
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             border-radius: 12px;
-            margin-bottom: 24px;
+            margin-bottom: 16px;
             overflow: hidden;
             cursor: none;
         }
@@ -230,27 +225,27 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .key-row {
             display: flex;
             justify-content: flex-start;
-            gap: 8px;
+            gap: 6px;
         }
 
         .key {
-            width: 56px;
-            height: 56px;
+            width: 44px;
+            height: 44px;
             background: var(--bg);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 6px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             font-weight: 600;
-            font-size: 1.1rem;
+            font-size: 0.95rem;
             transition: all 0.1s;
             cursor: pointer;
             user-select: none;
@@ -262,9 +257,9 @@
         }
 
         .key-label {
-            font-size: 0.65rem;
+            font-size: 0.55rem;
             color: var(--text-muted);
-            margin-top: 2px;
+            margin-top: 1px;
         }
 
         .key.active {
@@ -279,16 +274,16 @@
         }
 
         .key.space {
-            width: 200px;
+            width: 160px;
         }
 
         .key.modifier {
-            width: 72px;
-            font-size: 0.9rem;
+            width: 56px;
+            font-size: 0.75rem;
         }
 
         .key.shift {
-            width: 96px;
+            width: 76px;
         }
 
         /* Features */
@@ -385,69 +380,55 @@
         /* Responsive */
         @media (max-width: 600px) {
             h1 {
-                font-size: 2.5rem;
+                font-size: 1.5rem;
             }
 
             .hero {
-                padding: 60px 0 40px;
+                padding: 16px 0 12px;
             }
 
             .key {
-                width: 44px;
-                height: 44px;
-                font-size: 0.9rem;
+                width: 36px;
+                height: 36px;
+                font-size: 0.8rem;
             }
 
             .key.space {
-                width: 140px;
+                width: 120px;
             }
 
             .key.modifier {
-                width: 56px;
-                font-size: 0.7rem;
+                width: 44px;
+                font-size: 0.65rem;
             }
 
             .key.shift {
-                width: 72px;
+                width: 60px;
             }
 
             .demo-container {
-                padding: 20px;
+                padding: 16px;
             }
 
             .mouse-area {
-                height: 150px;
+                height: 120px;
+            }
+
+            .key-row {
+                gap: 4px;
+            }
+
+            .keyboard {
+                gap: 4px;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <section class="hero">
-            <span class="hero-icon">🖱️</span>
-            <h1>MouseKeys</h1>
-            <p class="tagline">Control your mouse with your keyboard. A lightweight macOS utility for precision cursor control.</p>
-            <div class="cta-buttons">
-                <a href="https://github.com/kidandcat/mousekeys/releases" class="btn btn-primary">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                        <polyline points="7 10 12 15 17 10"/>
-                        <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    Download
-                </a>
-                <a href="https://github.com/kidandcat/mousekeys" class="btn btn-secondary">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                    </svg>
-                    View on GitHub
-                </a>
-            </div>
-        </section>
-
         <section class="demo">
             <div class="demo-container">
-                <p class="demo-hint">Click the keys or use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> on your keyboard</p>
+                <p class="demo-hint">Click the keys or press <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to try it</p>
 
                 <div class="mouse-area" id="mouseArea">
                     <div class="grid-overlay"></div>
@@ -460,13 +441,13 @@
                 </div>
 
                 <div class="keyboard">
-                    <div class="key-row" style="margin-left: 32px">
+                    <div class="key-row" style="margin-left: 25px">
                         <div class="key" data-key="q" data-dx="-1" data-dy="-1">Q<span class="key-label">↖</span></div>
                         <div class="key" data-key="w" data-dx="0" data-dy="-1">W<span class="key-label">↑</span></div>
                         <div class="key" data-key="e" data-dx="1" data-dy="-1">E<span class="key-label">↗</span></div>
                         <div class="key" data-key="r" data-action="scrollUp">R<span class="key-label">scroll↑</span></div>
                     </div>
-                    <div class="key-row" style="margin-left: 48px">
+                    <div class="key-row" style="margin-left: 38px">
                         <div class="key" data-key="a" data-dx="-1" data-dy="0">A<span class="key-label">←</span></div>
                         <div class="key" data-key="s" data-dx="0" data-dy="1">S<span class="key-label">↓</span></div>
                         <div class="key" data-key="d" data-dx="1" data-dy="0">D<span class="key-label">→</span></div>
@@ -482,6 +463,27 @@
                         <div class="key space" data-key="space" data-action="leftClick">Space<span class="key-label">left click / drag</span></div>
                     </div>
                 </div>
+            </div>
+        </section>
+
+        <section class="hero">
+            <h1>MouseKeys</h1>
+            <p class="tagline">Control your mouse with your keyboard. Lightweight utility for precision cursor control.</p>
+            <div class="cta-buttons">
+                <a href="https://github.com/kidandcat/mousekeys/releases" class="btn btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Download
+                </a>
+                <a href="https://github.com/kidandcat/mousekeys" class="btn btn-secondary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                    GitHub
+                </a>
             </div>
         </section>
 
