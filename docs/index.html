@@ -38,7 +38,7 @@
 
         /* Hero */
         .hero {
-            padding: 80px 0 60px;
+            padding: 80px 0 40px;
             text-align: center;
         }
 
@@ -102,23 +102,141 @@
 
         /* Demo */
         .demo {
-            padding: 60px 0;
+            padding: 40px 0 60px;
         }
 
-        .keyboard {
+        .demo-container {
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 40px;
-            width: fit-content;
+            padding: 32px;
+            max-width: 700px;
             margin: 0 auto;
+        }
+
+        .demo-hint {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .demo-hint kbd {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: inherit;
+            font-size: 0.85rem;
+        }
+
+        /* Mouse Area */
+        .mouse-area {
+            position: relative;
+            height: 200px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 12px;
+            margin-bottom: 24px;
+            overflow: hidden;
+            cursor: none;
+        }
+
+        .mouse-area::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image:
+                radial-gradient(circle at 20% 30%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+        }
+
+        .grid-overlay {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .mouse-pointer {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            transition: left 0.05s linear, top 0.05s linear;
+            z-index: 10;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+        }
+
+        .mouse-pointer svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .click-ring {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .click-ring.animate {
+            animation: clickRing 0.4s ease-out forwards;
+        }
+
+        @keyframes clickRing {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, -50%) scale(1.5);
+                opacity: 0;
+            }
+        }
+
+        .trail-dot {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+
+        .trail-dot.animate {
+            animation: trailFade 0.5s ease-out forwards;
+        }
+
+        @keyframes trailFade {
+            0% {
+                opacity: 0.6;
+                transform: translate(-50%, -50%) scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.3);
+            }
+        }
+
+        /* Keyboard */
+        .keyboard {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
         }
 
         .key-row {
             display: flex;
             justify-content: flex-start;
             gap: 8px;
-            margin-bottom: 8px;
         }
 
         .key {
@@ -133,7 +251,14 @@
             justify-content: center;
             font-weight: 600;
             font-size: 1.1rem;
-            transition: all 0.2s;
+            transition: all 0.1s;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .key:hover {
+            border-color: var(--text-muted);
+            background: #1a1a1a;
         }
 
         .key-label {
@@ -146,6 +271,11 @@
             background: var(--accent);
             color: #000;
             border-color: var(--accent);
+            transform: scale(0.95);
+        }
+
+        .key.active .key-label {
+            color: #000;
         }
 
         .key.space {
@@ -281,8 +411,12 @@
                 width: 72px;
             }
 
-            .keyboard {
-                padding: 24px;
+            .demo-container {
+                padding: 20px;
+            }
+
+            .mouse-area {
+                height: 150px;
             }
         }
     </style>
@@ -312,27 +446,41 @@
         </section>
 
         <section class="demo">
-            <div class="keyboard">
-                <div class="key-row" style="margin-left: 32px">
-                    <div class="key">Q<span class="key-label">↖</span></div>
-                    <div class="key active">W<span class="key-label">↑</span></div>
-                    <div class="key">E<span class="key-label">↗</span></div>
-                    <div class="key">R<span class="key-label">scroll↑</span></div>
+            <div class="demo-container">
+                <p class="demo-hint">Click the keys or use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> on your keyboard</p>
+
+                <div class="mouse-area" id="mouseArea">
+                    <div class="grid-overlay"></div>
+                    <div class="mouse-pointer" id="mousePointer">
+                        <svg viewBox="0 0 24 24" fill="white" stroke="#000" stroke-width="1">
+                            <path d="M4 4l16 8-7 2-2 7z"/>
+                        </svg>
+                    </div>
+                    <div class="click-ring" id="clickRing"></div>
                 </div>
-                <div class="key-row" style="margin-left: 48px">
-                    <div class="key">A<span class="key-label">←</span></div>
-                    <div class="key">S<span class="key-label">↓</span></div>
-                    <div class="key">D<span class="key-label">→</span></div>
-                    <div class="key">F<span class="key-label">scroll↓</span></div>
-                </div>
-                <div class="key-row">
-                    <div class="key modifier shift">Shift<span class="key-label">middle</span></div>
-                    <div class="key">Z<span class="key-label">↙</span></div>
-                    <div class="key">X<span class="key-label">↘</span></div>
-                </div>
-                <div class="key-row">
-                    <div class="key modifier">Ctrl<span class="key-label">right</span></div>
-                    <div class="key space">Space<span class="key-label">left click / drag</span></div>
+
+                <div class="keyboard">
+                    <div class="key-row" style="margin-left: 32px">
+                        <div class="key" data-key="q" data-dx="-1" data-dy="-1">Q<span class="key-label">↖</span></div>
+                        <div class="key" data-key="w" data-dx="0" data-dy="-1">W<span class="key-label">↑</span></div>
+                        <div class="key" data-key="e" data-dx="1" data-dy="-1">E<span class="key-label">↗</span></div>
+                        <div class="key" data-key="r" data-action="scrollUp">R<span class="key-label">scroll↑</span></div>
+                    </div>
+                    <div class="key-row" style="margin-left: 48px">
+                        <div class="key" data-key="a" data-dx="-1" data-dy="0">A<span class="key-label">←</span></div>
+                        <div class="key" data-key="s" data-dx="0" data-dy="1">S<span class="key-label">↓</span></div>
+                        <div class="key" data-key="d" data-dx="1" data-dy="0">D<span class="key-label">→</span></div>
+                        <div class="key" data-key="f" data-action="scrollDown">F<span class="key-label">scroll↓</span></div>
+                    </div>
+                    <div class="key-row">
+                        <div class="key modifier shift" data-key="shift" data-action="middleClick">Shift<span class="key-label">middle</span></div>
+                        <div class="key" data-key="z" data-dx="-1" data-dy="1">Z<span class="key-label">↙</span></div>
+                        <div class="key" data-key="x" data-dx="1" data-dy="1">X<span class="key-label">↘</span></div>
+                    </div>
+                    <div class="key-row">
+                        <div class="key modifier" data-key="ctrl" data-action="rightClick">Ctrl<span class="key-label">right</span></div>
+                        <div class="key space" data-key="space" data-action="leftClick">Space<span class="key-label">left click / drag</span></div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -392,5 +540,182 @@
             <p style="margin-top: 8px">MIT License</p>
         </footer>
     </div>
+
+    <script>
+        const mouseArea = document.getElementById('mouseArea');
+        const mousePointer = document.getElementById('mousePointer');
+        const clickRing = document.getElementById('clickRing');
+        const keys = document.querySelectorAll('.key');
+
+        // Mouse position
+        let mouseX = mouseArea.offsetWidth / 2;
+        let mouseY = mouseArea.offsetHeight / 2;
+        const speed = 8;
+        const diagonalFactor = 0.707; // 1/sqrt(2)
+
+        // Active keys for continuous movement
+        const activeKeys = new Set();
+        let animationFrame = null;
+
+        // Update pointer position
+        function updatePointer() {
+            const bounds = mouseArea.getBoundingClientRect();
+            mousePointer.style.left = mouseX + 'px';
+            mousePointer.style.top = mouseY + 'px';
+        }
+
+        // Create trail dot
+        function createTrail(x, y) {
+            const trail = document.createElement('div');
+            trail.className = 'trail-dot';
+            trail.style.left = x + 12 + 'px';
+            trail.style.top = y + 12 + 'px';
+            mouseArea.appendChild(trail);
+
+            requestAnimationFrame(() => trail.classList.add('animate'));
+            setTimeout(() => trail.remove(), 500);
+        }
+
+        // Move mouse
+        function moveBy(dx, dy) {
+            const maxX = mouseArea.offsetWidth - 24;
+            const maxY = mouseArea.offsetHeight - 24;
+
+            // Normalize diagonal movement
+            if (dx !== 0 && dy !== 0) {
+                dx *= diagonalFactor;
+                dy *= diagonalFactor;
+            }
+
+            const oldX = mouseX;
+            const oldY = mouseY;
+
+            mouseX = Math.max(0, Math.min(maxX, mouseX + dx * speed));
+            mouseY = Math.max(0, Math.min(maxY, mouseY + dy * speed));
+
+            if (oldX !== mouseX || oldY !== mouseY) {
+                createTrail(mouseX, mouseY);
+            }
+
+            updatePointer();
+        }
+
+        // Animation loop for held keys
+        function animate() {
+            let dx = 0, dy = 0;
+
+            activeKeys.forEach(key => {
+                const keyEl = document.querySelector(`[data-key="${key}"]`);
+                if (keyEl && keyEl.dataset.dx !== undefined) {
+                    dx += parseInt(keyEl.dataset.dx);
+                    dy += parseInt(keyEl.dataset.dy);
+                }
+            });
+
+            if (dx !== 0 || dy !== 0) {
+                moveBy(dx, dy);
+            }
+
+            if (activeKeys.size > 0) {
+                animationFrame = requestAnimationFrame(animate);
+            }
+        }
+
+        // Show click effect
+        function showClick(color = 'var(--accent)') {
+            clickRing.style.left = (mouseX + 12) + 'px';
+            clickRing.style.top = (mouseY + 12) + 'px';
+            clickRing.style.borderColor = color;
+            clickRing.classList.remove('animate');
+            void clickRing.offsetWidth; // Reflow
+            clickRing.classList.add('animate');
+        }
+
+        // Handle key press
+        function handleKeyDown(keyName, keyEl) {
+            if (keyEl.classList.contains('active')) return;
+
+            keyEl.classList.add('active');
+
+            const action = keyEl.dataset.action;
+            if (action === 'leftClick') {
+                showClick('#10b981');
+            } else if (action === 'rightClick') {
+                showClick('#f59e0b');
+            } else if (action === 'middleClick') {
+                showClick('#3b82f6');
+            } else if (keyEl.dataset.dx !== undefined) {
+                activeKeys.add(keyName);
+                if (!animationFrame) {
+                    animate();
+                }
+            }
+        }
+
+        // Handle key release
+        function handleKeyUp(keyName, keyEl) {
+            keyEl.classList.remove('active');
+            activeKeys.delete(keyName);
+
+            if (activeKeys.size === 0 && animationFrame) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = null;
+            }
+        }
+
+        // Mouse events on keys
+        keys.forEach(key => {
+            const keyName = key.dataset.key;
+
+            key.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                handleKeyDown(keyName, key);
+            });
+
+            key.addEventListener('mouseup', () => {
+                handleKeyUp(keyName, key);
+            });
+
+            key.addEventListener('mouseleave', () => {
+                if (key.classList.contains('active')) {
+                    handleKeyUp(keyName, key);
+                }
+            });
+        });
+
+        // Keyboard events
+        const keyMap = {
+            'q': 'q', 'w': 'w', 'e': 'e', 'r': 'r',
+            'a': 'a', 's': 's', 'd': 'd', 'f': 'f',
+            'z': 'z', 'x': 'x',
+            ' ': 'space',
+            'Shift': 'shift',
+            'Control': 'ctrl'
+        };
+
+        document.addEventListener('keydown', (e) => {
+            const keyName = keyMap[e.key];
+            if (!keyName) return;
+
+            const keyEl = document.querySelector(`[data-key="${keyName}"]`);
+            if (keyEl) {
+                e.preventDefault();
+                handleKeyDown(keyName, keyEl);
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            const keyName = keyMap[e.key];
+            if (!keyName) return;
+
+            const keyEl = document.querySelector(`[data-key="${keyName}"]`);
+            if (keyEl) {
+                handleKeyUp(keyName, keyEl);
+            }
+        });
+
+        // Initialize
+        updatePointer();
+    </script>
 </body>
 </html>
