@@ -380,6 +380,46 @@
             }
         }
 
+        /* Context Menu */
+        .context-menu {
+            position: absolute;
+            background: rgba(30, 30, 30, 0.95);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px;
+            padding: 4px 0;
+            min-width: 120px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            z-index: 20;
+            opacity: 0;
+            transform: scale(0.95);
+            pointer-events: none;
+            transition: opacity 0.15s, transform 0.15s;
+        }
+
+        .context-menu.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .context-item {
+            padding: 6px 12px;
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.9);
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+
+        .context-item:hover {
+            background: var(--accent);
+            color: #000;
+        }
+
+        .context-divider {
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+            margin: 4px 0;
+        }
+
         /* Keyboard */
         .keyboard {
             display: flex;
@@ -773,6 +813,13 @@
                         </svg>
                     </div>
                     <div class="click-ring" id="clickRing"></div>
+                    <div class="context-menu" id="contextMenu">
+                        <div class="context-item">Cut</div>
+                        <div class="context-item">Copy</div>
+                        <div class="context-item">Paste</div>
+                        <div class="context-divider"></div>
+                        <div class="context-item">Select All</div>
+                    </div>
                 </div>
 
                 <div class="keyboard" style="display: none;">
@@ -892,7 +939,9 @@
         const introLed = document.getElementById('introLed');
         const demoHint = document.getElementById('demoHint');
         const keyboard = document.querySelector('.keyboard');
+        const contextMenu = document.getElementById('contextMenu');
         let keys = document.querySelectorAll('.key');
+        let contextMenuTimeout = null;
 
         // State
         let mouseX = 0;
@@ -1112,14 +1161,47 @@
             if (activeKeys.size > 0) animationFrame = requestAnimationFrame(animate);
         }
 
+        // Show context menu
+        function showContextMenu() {
+            // Hide any existing menu first
+            hideContextMenu();
+
+            // Position menu at cursor
+            const menuX = Math.min(mouseX + 12, mouseArea.offsetWidth - 130);
+            const menuY = Math.min(mouseY + 12, mouseArea.offsetHeight - 100);
+            contextMenu.style.left = menuX + 'px';
+            contextMenu.style.top = menuY + 'px';
+            contextMenu.classList.add('visible');
+
+            // Auto-hide after 2 seconds
+            contextMenuTimeout = setTimeout(hideContextMenu, 2000);
+        }
+
+        function hideContextMenu() {
+            contextMenu.classList.remove('visible');
+            if (contextMenuTimeout) {
+                clearTimeout(contextMenuTimeout);
+                contextMenuTimeout = null;
+            }
+        }
+
         // Show click effect
-        function showClick(color) {
+        function showClick(color, isRightClick = false) {
+            // Hide context menu on any click
+            if (!isRightClick) hideContextMenu();
+
             clickRing.style.left = (mouseX + 12) + 'px';
             clickRing.style.top = (mouseY + 12) + 'px';
             clickRing.style.borderColor = color;
             clickRing.classList.remove('animate');
             void clickRing.offsetWidth;
             clickRing.classList.add('animate');
+
+            // Show context menu on right click
+            if (isRightClick) {
+                showContextMenu();
+                return;
+            }
 
             // Handle virtual button clicks
             if (hoveredElement && hoveredElement.classList.contains('virtual-btn')) {
@@ -1163,7 +1245,7 @@
             if (action === 'leftClick') {
                 showClick('#10b981');
             } else if (action === 'rightClick') {
-                showClick('#f59e0b');
+                showClick('#f59e0b', true);
             } else if (action === 'middleClick') {
                 showClick('#3b82f6');
             } else if (action === 'scrollUp') {
