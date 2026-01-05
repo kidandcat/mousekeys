@@ -810,7 +810,10 @@
         // State
         let mouseX = mouseArea.offsetWidth / 2;
         let mouseY = mouseArea.offsetHeight / 2;
-        const speed = 8;
+        const baseSpeed = 2;
+        const maxSpeed = 16;
+        const accelerationRate = 0.15;
+        let currentSpeed = baseSpeed;
         const diagonalFactor = 0.707;
         const activeKeys = new Set();
         let animationFrame = null;
@@ -819,6 +822,7 @@
         let scrollPosition = 0;
         const maxScroll = 100;
         let hoveredElement = null;
+        let lastDirection = { dx: 0, dy: 0 };
 
         // Update pointer position
         function updatePointer() {
@@ -925,13 +929,25 @@
         function moveBy(dx, dy) {
             const maxX = mouseArea.offsetWidth - 24;
             const maxY = mouseArea.offsetHeight - 24;
+
+            // Check if direction changed - reset acceleration
+            if ((dx !== 0 || dy !== 0) && (Math.sign(dx) !== Math.sign(lastDirection.dx) || Math.sign(dy) !== Math.sign(lastDirection.dy))) {
+                currentSpeed = baseSpeed;
+            }
+            lastDirection = { dx, dy };
+
+            // Apply acceleration
+            if (dx !== 0 || dy !== 0) {
+                currentSpeed = Math.min(maxSpeed, currentSpeed + accelerationRate);
+            }
+
             if (dx !== 0 && dy !== 0) {
                 dx *= diagonalFactor;
                 dy *= diagonalFactor;
             }
             const oldX = mouseX, oldY = mouseY;
-            mouseX = Math.max(0, Math.min(maxX, mouseX + dx * speed));
-            mouseY = Math.max(0, Math.min(maxY, mouseY + dy * speed));
+            mouseX = Math.max(0, Math.min(maxX, mouseX + dx * currentSpeed));
+            mouseY = Math.max(0, Math.min(maxY, mouseY + dy * currentSpeed));
             if (oldX !== mouseX || oldY !== mouseY) createTrail(mouseX, mouseY);
             updatePointer();
         }
@@ -1053,9 +1069,14 @@
             const action = keyEl.dataset.action;
             if (action === 'leftClick') handleClickRelease();
 
-            if (activeKeys.size === 0 && animationFrame) {
-                cancelAnimationFrame(animationFrame);
-                animationFrame = null;
+            // Reset acceleration when all movement keys released
+            if (activeKeys.size === 0) {
+                currentSpeed = baseSpeed;
+                lastDirection = { dx: 0, dy: 0 };
+                if (animationFrame) {
+                    cancelAnimationFrame(animationFrame);
+                    animationFrame = null;
+                }
             }
         }
 
