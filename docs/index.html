@@ -469,6 +469,94 @@
             box-shadow: 0 0 8px #10b981, inset 0 -1px 2px rgba(0,0,0,0.3);
         }
 
+        /* Intro Caps Lock Animation */
+        .intro-caps-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 180px;
+            margin-bottom: 16px;
+        }
+
+        .intro-caps-key {
+            background: var(--bg);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            padding: 24px 40px;
+            font-size: 1.4rem;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.15s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+        }
+
+        .intro-caps-key:hover {
+            border-color: var(--accent);
+            transform: scale(1.02);
+        }
+
+        .intro-caps-key:active {
+            transform: scale(0.98);
+        }
+
+        .intro-caps-key .caps-led {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 10px;
+            height: 10px;
+        }
+
+        .intro-caps-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .intro-caps-key.pressed {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+            transform: scale(0.95);
+        }
+
+        .intro-caps-key.pressed .intro-caps-label {
+            color: #000;
+            opacity: 0.7;
+        }
+
+        .intro-caps-container.animating {
+            position: relative;
+        }
+
+        .intro-caps-container.animating .intro-caps-key {
+            animation: capsToKeyboard 0.6s ease-in-out forwards;
+        }
+
+        @keyframes capsToKeyboard {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(0.6);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(0.3);
+                opacity: 0;
+            }
+        }
+
+        .intro-caps-container.hidden {
+            display: none;
+        }
+
         /* Features */
         .features {
             padding: 60px 0;
@@ -640,9 +728,18 @@
     <div class="container">
         <section class="demo">
             <div class="demo-container">
-                <p class="demo-hint">Press <kbd>Caps</kbd> to activate, then <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to move</p>
+                <p class="demo-hint" id="demoHint">Press <kbd>Caps Lock</kbd> to start</p>
 
-                <div class="mouse-area" id="mouseArea">
+                <!-- Intro Caps Lock key -->
+                <div class="intro-caps-container" id="introCaps">
+                    <div class="intro-caps-key" id="introCapsKey">
+                        <span class="caps-led" id="introLed"></span>
+                        Caps Lock
+                        <span class="intro-caps-label">Click to activate</span>
+                    </div>
+                </div>
+
+                <div class="mouse-area" id="mouseArea" style="display: none;">
                     <!-- Virtual UI -->
                     <div class="virtual-ui">
                         <!-- Buttons Panel -->
@@ -688,19 +785,14 @@
                     <div class="click-ring" id="clickRing"></div>
                 </div>
 
-                <div class="keyboard">
+                <div class="keyboard" style="display: none;">
                     <div class="key-row" style="margin-left: 25px">
                         <div class="key" data-key="q" data-dx="-1" data-dy="-1">Q<span class="key-label">↖</span></div>
                         <div class="key" data-key="w" data-dx="0" data-dy="-1">W<span class="key-label">↑</span></div>
                         <div class="key" data-key="e" data-dx="1" data-dy="-1">E<span class="key-label">↗</span></div>
                         <div class="key" data-key="r" data-action="scrollUp">R<span class="key-label">scroll↑</span></div>
                     </div>
-                    <div class="key-row">
-                        <div class="key capslock" data-key="capslock" data-action="toggle">
-                            <span class="caps-led" id="capsLed"></span>
-                            Caps
-                            <span class="key-label">toggle</span>
-                        </div>
+                    <div class="key-row" style="margin-left: 38px">
                         <div class="key" data-key="a" data-dx="-1" data-dy="0">A<span class="key-label">←</span></div>
                         <div class="key" data-key="s" data-dx="0" data-dy="1">S<span class="key-label">↓</span></div>
                         <div class="key" data-key="d" data-dx="1" data-dy="0">D<span class="key-label">→</span></div>
@@ -800,16 +892,21 @@
         const mouseArea = document.getElementById('mouseArea');
         const mousePointer = document.getElementById('mousePointer');
         const clickRing = document.getElementById('clickRing');
-        const capsLed = document.getElementById('capsLed');
+        // capsLed is now only in intro
         const dragItem = document.getElementById('dragItem');
         const dropTarget = document.getElementById('dropTarget');
         const scrollInner = document.getElementById('scrollInner');
         const scrollThumb = document.getElementById('scrollThumb');
-        const keys = document.querySelectorAll('.key');
+        const introCaps = document.getElementById('introCaps');
+        const introCapsKey = document.getElementById('introCapsKey');
+        const introLed = document.getElementById('introLed');
+        const demoHint = document.getElementById('demoHint');
+        const keyboard = document.querySelector('.keyboard');
+        let keys = document.querySelectorAll('.key');
 
         // State
-        let mouseX = mouseArea.offsetWidth / 2;
-        let mouseY = mouseArea.offsetHeight / 2;
+        let mouseX = 0;
+        let mouseY = 0;
         const baseSpeed = 2;
         const maxSpeed = 16;
         const accelerationRate = 0.15;
@@ -823,6 +920,49 @@
         const maxScroll = 100;
         let hoveredElement = null;
         let lastDirection = { dx: 0, dy: 0 };
+        let isIntroComplete = false;
+
+        // Intro animation
+        function startIntro() {
+            introCapsKey.classList.add('pressed');
+            introLed.classList.add('on');
+
+            setTimeout(() => {
+                introCaps.classList.add('animating');
+
+                setTimeout(() => {
+                    // Hide intro, show demo
+                    introCaps.classList.add('hidden');
+                    mouseArea.style.display = '';
+                    keyboard.style.display = '';
+                    demoHint.innerHTML = 'Use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to move, <kbd>Space</kbd> to click';
+
+                    // Activate MouseKeys
+                    isMouseKeysActive = true;
+                    isIntroComplete = true;
+
+                    // Initialize mouse position
+                    mouseX = mouseArea.offsetWidth / 2;
+                    mouseY = mouseArea.offsetHeight / 2;
+                    updatePointer();
+
+                    // Re-query keys after DOM is visible
+                    keys = document.querySelectorAll('.key');
+                    setupKeyEvents();
+                }, 600);
+            }, 300);
+        }
+
+        // Click on intro caps key
+        introCapsKey.addEventListener('click', startIntro);
+
+        // Also listen for actual CapsLock key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'CapsLock' && !isIntroComplete) {
+                e.preventDefault();
+                startIntro();
+            }
+        });
 
         // Update pointer position
         function updatePointer() {
@@ -1031,28 +1171,12 @@
             }
         }
 
-        // Toggle MouseKeys
-        function toggleMouseKeys() {
-            isMouseKeysActive = !isMouseKeysActive;
-            capsLed.classList.toggle('on', isMouseKeysActive);
-        }
-
         // Handle key press
         function handleKeyDown(keyName, keyEl) {
-            if (keyEl.classList.contains('active')) return;
-
-            const action = keyEl.dataset.action;
-
-            // Caps Lock always works - but don't show as active (green)
-            if (action === 'toggle') {
-                toggleMouseKeys();
-                return;
-            }
-
-            // Other keys only work when MouseKeys is active
-            if (!isMouseKeysActive) return;
+            if (!isIntroComplete || keyEl.classList.contains('active')) return;
 
             keyEl.classList.add('active');
+            const action = keyEl.dataset.action;
 
             if (action === 'leftClick') {
                 showClick('#10b981');
@@ -1089,18 +1213,20 @@
             }
         }
 
-        // Mouse events on keys
-        keys.forEach(key => {
-            const keyName = key.dataset.key;
-            key.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                handleKeyDown(keyName, key);
+        // Setup key events (called after intro)
+        function setupKeyEvents() {
+            keys.forEach(key => {
+                const keyName = key.dataset.key;
+                key.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    handleKeyDown(keyName, key);
+                });
+                key.addEventListener('mouseup', () => handleKeyUp(keyName, key));
+                key.addEventListener('mouseleave', () => {
+                    if (key.classList.contains('active')) handleKeyUp(keyName, key);
+                });
             });
-            key.addEventListener('mouseup', () => handleKeyUp(keyName, key));
-            key.addEventListener('mouseleave', () => {
-                if (key.classList.contains('active')) handleKeyUp(keyName, key);
-            });
-        });
+        }
 
         // Keyboard events
         const keyMap = {
@@ -1109,11 +1235,11 @@
             'z': 'z', 'x': 'x',
             ' ': 'space',
             'Shift': 'shift',
-            'Control': 'ctrl',
-            'CapsLock': 'capslock'
+            'Control': 'ctrl'
         };
 
         document.addEventListener('keydown', (e) => {
+            if (!isIntroComplete) return;
             const keyName = keyMap[e.key];
             if (!keyName) return;
             const keyEl = document.querySelector(`[data-key="${keyName}"]`);
@@ -1124,14 +1250,14 @@
         });
 
         document.addEventListener('keyup', (e) => {
+            if (!isIntroComplete) return;
             const keyName = keyMap[e.key];
             if (!keyName) return;
             const keyEl = document.querySelector(`[data-key="${keyName}"]`);
             if (keyEl) handleKeyUp(keyName, keyEl);
         });
 
-        // Initialize
-        updatePointer();
+        // Initialize scroll thumb
         scrollThumb.style.height = '40%';
         scrollThumb.style.top = '0';
     </script>
