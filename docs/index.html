@@ -485,7 +485,6 @@
             padding: 24px 40px;
             font-size: 1.4rem;
             font-weight: 600;
-            cursor: pointer;
             position: relative;
             transition: all 0.15s;
             display: flex;
@@ -493,15 +492,6 @@
             align-items: center;
             gap: 8px;
             user-select: none;
-        }
-
-        .intro-caps-key:hover {
-            border-color: var(--accent);
-            transform: scale(1.02);
-        }
-
-        .intro-caps-key:active {
-            transform: scale(0.98);
         }
 
         .intro-caps-key .caps-led {
@@ -728,14 +718,14 @@
     <div class="container">
         <section class="demo">
             <div class="demo-container">
-                <p class="demo-hint" id="demoHint">Press <kbd>Caps Lock</kbd> to start</p>
+                <p class="demo-hint" id="demoHint">Try the interactive demo</p>
 
                 <!-- Intro Caps Lock key -->
                 <div class="intro-caps-container" id="introCaps">
                     <div class="intro-caps-key" id="introCapsKey">
                         <span class="caps-led" id="introLed"></span>
                         Caps Lock
-                        <span class="intro-caps-label">Click to activate</span>
+                        <span class="intro-caps-label">Activating...</span>
                     </div>
                 </div>
 
@@ -953,16 +943,8 @@
             }, 300);
         }
 
-        // Click on intro caps key
-        introCapsKey.addEventListener('click', startIntro);
-
-        // Also listen for actual CapsLock key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'CapsLock' && !isIntroComplete) {
-                e.preventDefault();
-                startIntro();
-            }
-        });
+        // Auto-start after 1 second
+        setTimeout(startIntro, 1000);
 
         // Update pointer position
         function updatePointer() {
