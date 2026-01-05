@@ -1043,9 +1043,8 @@
 
             const action = keyEl.dataset.action;
 
-            // Caps Lock always works
+            // Caps Lock always works - but don't show as active (green)
             if (action === 'toggle') {
-                keyEl.classList.add('active');
                 toggleMouseKeys();
                 return;
             }
