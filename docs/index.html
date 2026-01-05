@@ -640,7 +640,7 @@
     <div class="container">
         <section class="demo">
             <div class="demo-container">
-                <p class="demo-hint">Click the keys or press <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to try it</p>
+                <p class="demo-hint">Press <kbd>Caps</kbd> to activate, then <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to move</p>
 
                 <div class="mouse-area" id="mouseArea">
                     <!-- Virtual UI -->
@@ -1040,12 +1040,22 @@
         // Handle key press
         function handleKeyDown(keyName, keyEl) {
             if (keyEl.classList.contains('active')) return;
-            keyEl.classList.add('active');
 
             const action = keyEl.dataset.action;
+
+            // Caps Lock always works
             if (action === 'toggle') {
+                keyEl.classList.add('active');
                 toggleMouseKeys();
-            } else if (action === 'leftClick') {
+                return;
+            }
+
+            // Other keys only work when MouseKeys is active
+            if (!isMouseKeysActive) return;
+
+            keyEl.classList.add('active');
+
+            if (action === 'leftClick') {
                 showClick('#10b981');
             } else if (action === 'rightClick') {
                 showClick('#f59e0b');
