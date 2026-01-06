@@ -10,11 +10,13 @@ import (
 )
 
 const (
-	baseSpeed    = 1.0
-	maxSpeed     = 100.0
-	accelTime    = 1.2
-	tickInterval = 16 * time.Millisecond
-	scrollAmount = 50
+	baseSpeed        = 1.0
+	maxSpeed         = 100.0
+	accelTime        = 1.2
+	tickInterval     = 16 * time.Millisecond
+	scrollAmount     = 50
+	decelerationRate = 0.85  // Friction multiplier per tick (0-1, lower = faster stop)
+	stopThreshold    = 0.5   // Stop when velocity below this
 )
 
 type MouseController struct {
@@ -28,6 +30,10 @@ type MouseController struct {
 	keyQ, keyE, keyZ, keyX bool
 
 	leftDown bool
+
+	// Velocity for deceleration
+	velocityX float64
+	velocityY float64
 }
 
 var (
@@ -221,78 +227,108 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 	defer mc.mu.Unlock()
 
 	if !mc.active {
+		mc.velocityX = 0
+		mc.velocityY = 0
 		return 0, 0
 	}
 
+	// Get input direction
+	inputX, inputY := 0.0, 0.0
 	if mc.keyW {
-		dy -= 1
+		inputY -= 1
 	}
 	if mc.keyS {
-		dy += 1
+		inputY += 1
 	}
 	if mc.keyA {
-		dx -= 1
+		inputX -= 1
 	}
 	if mc.keyD {
-		dx += 1
+		inputX += 1
 	}
 	if mc.keyQ {
-		dx -= 0.707
-		dy -= 0.707
+		inputX -= 0.707
+		inputY -= 0.707
 	}
 	if mc.keyE {
-		dx += 0.707
-		dy -= 0.707
+		inputX += 0.707
+		inputY -= 0.707
 	}
 	if mc.keyZ {
-		dx -= 0.707
-		dy += 0.707
+		inputX -= 0.707
+		inputY += 0.707
 	}
 	if mc.keyX {
-		dx += 0.707
-		dy += 0.707
+		inputX += 0.707
+		inputY += 0.707
 	}
 
-	if dx == 0 && dy == 0 {
-		mc.moveStartTime = time.Time{}
-		mc.lastDirX, mc.lastDirY = 0, 0
+	// Keys are pressed - accelerate
+	if inputX != 0 || inputY != 0 {
+		dirX, dirY := 0.0, 0.0
+		if inputX > 0 {
+			dirX = 1
+		} else if inputX < 0 {
+			dirX = -1
+		}
+		if inputY > 0 {
+			dirY = 1
+		} else if inputY < 0 {
+			dirY = -1
+		}
+
+		if dirX != mc.lastDirX || dirY != mc.lastDirY {
+			mc.moveStartTime = time.Now()
+			mc.lastDirX, mc.lastDirY = dirX, dirY
+		}
+
+		if mc.moveStartTime.IsZero() {
+			mc.moveStartTime = time.Now()
+		}
+
+		elapsed := time.Since(mc.moveStartTime).Seconds()
+		progress := elapsed / accelTime
+		if progress > 1 {
+			progress = 1
+		}
+		speed := baseSpeed + (maxSpeed-baseSpeed)*progress
+
+		// Normalize diagonal
+		if inputX != 0 && inputY != 0 {
+			inputX *= 0.707
+			inputY *= 0.707
+		}
+
+		// Update velocity
+		mc.velocityX = inputX * speed
+		mc.velocityY = inputY * speed
+
+		return mc.velocityX, mc.velocityY
+	}
+
+	// No keys pressed - decelerate
+	mc.moveStartTime = time.Time{}
+	mc.lastDirX, mc.lastDirY = 0, 0
+
+	// Apply friction
+	mc.velocityX *= decelerationRate
+	mc.velocityY *= decelerationRate
+
+	// Stop if below threshold
+	if abs(mc.velocityX) < stopThreshold && abs(mc.velocityY) < stopThreshold {
+		mc.velocityX = 0
+		mc.velocityY = 0
 		return 0, 0
 	}
 
-	dirX, dirY := 0.0, 0.0
-	if dx > 0 {
-		dirX = 1
-	} else if dx < 0 {
-		dirX = -1
-	}
-	if dy > 0 {
-		dirY = 1
-	} else if dy < 0 {
-		dirY = -1
-	}
+	return mc.velocityX, mc.velocityY
+}
 
-	if dirX != mc.lastDirX || dirY != mc.lastDirY {
-		mc.moveStartTime = time.Now()
-		mc.lastDirX, mc.lastDirY = dirX, dirY
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
 	}
-
-	if mc.moveStartTime.IsZero() {
-		mc.moveStartTime = time.Now()
-	}
-
-	elapsed := time.Since(mc.moveStartTime).Seconds()
-	progress := elapsed / accelTime
-	if progress > 1 {
-		progress = 1
-	}
-	speed := baseSpeed + (maxSpeed-baseSpeed)*progress
-
-	if dx != 0 && dy != 0 {
-		dx *= 0.707
-		dy *= 0.707
-	}
-
-	return dx * speed, dy * speed
+	return x
 }
 
 func (mc *MouseController) RunLoop() {

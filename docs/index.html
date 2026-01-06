@@ -949,11 +949,14 @@
         const baseSpeed = 1;
         const maxSpeed = 16;
         const accelerationRate = 0.25;
-        const decelerationRate = 0.92; // Friction multiplier (0-1, lower = faster stop)
-        const stopThreshold = 0.1; // Stop when velocity below this
+        const decelerationRate = 0.88; // Friction multiplier (0-1, lower = faster stop)
+        const stopThreshold = 0.3; // Stop when velocity below this
         let currentSpeed = baseSpeed;
         let velocityX = 0;
         let velocityY = 0;
+        let savedVelocityX = 0;
+        let savedVelocityY = 0;
+        let prevActiveCount = 0;
         const diagonalFactor = 0.707;
         const activeKeys = new Set();
         let animationFrame = null;
@@ -1170,12 +1173,28 @@
                 }
             });
 
-            if (activeKeys.size > 0) {
+            const currentActiveCount = activeKeys.size;
+
+            if (currentActiveCount > 0) {
+                // Save velocity BEFORE moveBy updates it (captures diagonal velocity)
+                if (Math.abs(velocityX) > Math.abs(savedVelocityX)) savedVelocityX = velocityX;
+                if (Math.abs(velocityY) > Math.abs(savedVelocityY)) savedVelocityY = velocityY;
+
                 // Keys held - accelerate in direction
                 moveBy(dx, dy);
+                prevActiveCount = currentActiveCount;
                 animationFrame = requestAnimationFrame(animate);
             } else {
                 // No keys - coast with deceleration
+                // If we just transitioned from keys pressed to no keys, use saved velocity
+                if (prevActiveCount > 0) {
+                    velocityX = savedVelocityX;
+                    velocityY = savedVelocityY;
+                    savedVelocityX = 0;
+                    savedVelocityY = 0;
+                }
+                prevActiveCount = 0;
+
                 velocityX *= decelerationRate;
                 velocityY *= decelerationRate;
 
