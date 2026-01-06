@@ -10,12 +10,13 @@ import (
 )
 
 const (
-	baseSpeed        = 1.0
-	maxSpeed         = 100.0
-	accelTime        = 1.2
+	baseSpeed        = 1.5   // Slow start for precision
+	maxSpeed         = 100.0 // Max speed
+	accelTime        = 0.25  // Time to reach max speed
+	precisionTime    = 0.05  // First 50ms stays slow for precision
 	tickInterval     = 16 * time.Millisecond
 	scrollAmount     = 50
-	decelerationRate = 0.85  // Friction multiplier per tick (0-1, lower = faster stop)
+	decelerationRate = 0.72  // Friction multiplier per tick (0-1, lower = faster stop)
 	stopThreshold    = 0.5   // Stop when velocity below this
 )
 
@@ -34,12 +35,19 @@ type MouseController struct {
 	// Velocity for deceleration
 	velocityX float64
 	velocityY float64
+
+	// Saved velocity for deceleration (only used when all keys released)
+	savedVelocityX  float64
+	savedVelocityY  float64
+	hadDiagonal     bool // Track if we had diagonal movement
+	prevHadInput    bool // Track if previous frame had any input
 }
 
 var (
-	mc        *MouseController
-	hook      KeyboardHook
-	autostart Autostart
+	mc                  *MouseController
+	hook                KeyboardHook
+	autostart           Autostart
+	accelerationEnabled = true
 )
 
 func NewMouseController() *MouseController {
@@ -263,8 +271,23 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 		inputY += 0.707
 	}
 
+	// Check if we have diagonal input
+	isDiagonal := inputX != 0 && inputY != 0
+
 	// Keys are pressed - accelerate
 	if inputX != 0 || inputY != 0 {
+		// Save velocity only when we have diagonal movement
+		if isDiagonal {
+			mc.savedVelocityX = mc.velocityX
+			mc.savedVelocityY = mc.velocityY
+			mc.hadDiagonal = true
+		} else if mc.hadDiagonal {
+			// Direction changed from diagonal to single axis - clear saved velocity
+			mc.savedVelocityX = 0
+			mc.savedVelocityY = 0
+			mc.hadDiagonal = false
+		}
+
 		dirX, dirY := 0.0, 0.0
 		if inputX > 0 {
 			dirX = 1
@@ -277,24 +300,50 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 			dirY = -1
 		}
 
-		if dirX != mc.lastDirX || dirY != mc.lastDirY {
-			mc.moveStartTime = time.Now()
-			mc.lastDirX, mc.lastDirY = dirX, dirY
-		}
-
+		// Only start timing when we begin moving
 		if mc.moveStartTime.IsZero() {
 			mc.moveStartTime = time.Now()
+		} else if dirX != mc.lastDirX || dirY != mc.lastDirY {
+			// Direction changed - halve the accumulated time (halves the speed)
+			elapsed := time.Since(mc.moveStartTime)
+			mc.moveStartTime = time.Now().Add(-elapsed / 2)
 		}
+		mc.lastDirX, mc.lastDirY = dirX, dirY
 
 		elapsed := time.Since(mc.moveStartTime).Seconds()
-		progress := elapsed / accelTime
-		if progress > 1 {
-			progress = 1
+
+		var speed float64
+		var effectiveMaxSpeed, effectiveAccelTime, effectivePrecisionTime float64
+
+		if !accelerationEnabled {
+			// Subtle acceleration: smaller range, faster times
+			effectiveMaxSpeed = 50.0
+			effectiveAccelTime = 0.1
+			effectivePrecisionTime = 0.03
+		} else {
+			effectiveMaxSpeed = maxSpeed
+			effectiveAccelTime = accelTime
+			effectivePrecisionTime = precisionTime
 		}
-		speed := baseSpeed + (maxSpeed-baseSpeed)*progress
+
+		// Custom acceleration curve: slow precision phase, then fast acceleration
+		if elapsed < effectivePrecisionTime {
+			// Precision phase: stay at base speed
+			speed = baseSpeed
+		} else {
+			// Acceleration phase: exponential curve for faster ramp-up
+			accelElapsed := elapsed - effectivePrecisionTime
+			progress := accelElapsed / effectiveAccelTime
+			if progress > 1 {
+				progress = 1
+			}
+			// Use quadratic curve for faster acceleration feel
+			progress = progress * progress
+			speed = baseSpeed + (effectiveMaxSpeed-baseSpeed)*progress
+		}
 
 		// Normalize diagonal
-		if inputX != 0 && inputY != 0 {
+		if isDiagonal {
 			inputX *= 0.707
 			inputY *= 0.707
 		}
@@ -302,17 +351,32 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 		// Update velocity
 		mc.velocityX = inputX * speed
 		mc.velocityY = inputY * speed
+		mc.prevHadInput = true
 
 		return mc.velocityX, mc.velocityY
 	}
 
 	// No keys pressed - decelerate
+	// Restore saved diagonal velocity only when transitioning from input to no input
+	if mc.prevHadInput && mc.hadDiagonal && (mc.savedVelocityX != 0 || mc.savedVelocityY != 0) {
+		mc.velocityX = mc.savedVelocityX
+		mc.velocityY = mc.savedVelocityY
+	}
+	mc.savedVelocityX = 0
+	mc.savedVelocityY = 0
+	mc.hadDiagonal = false
+	mc.prevHadInput = false
+
 	mc.moveStartTime = time.Time{}
 	mc.lastDirX, mc.lastDirY = 0, 0
 
-	// Apply friction
-	mc.velocityX *= decelerationRate
-	mc.velocityY *= decelerationRate
+	// Apply friction (faster when acceleration disabled)
+	effectiveDecel := decelerationRate
+	if !accelerationEnabled {
+		effectiveDecel = 0.5 // Much faster deceleration
+	}
+	mc.velocityX *= effectiveDecel
+	mc.velocityY *= effectiveDecel
 
 	// Stop if below threshold
 	if abs(mc.velocityX) < stopThreshold && abs(mc.velocityY) < stopThreshold {
@@ -386,6 +450,8 @@ func onReady() {
 	mStatus := systray.AddMenuItem("Inactive", "Current status")
 	mStatus.Disable()
 	systray.AddSeparator()
+	mAcceleration := systray.AddMenuItem("Acceleration", "Toggle mouse acceleration")
+	mAcceleration.Check()
 	mRunOnLogin := systray.AddMenuItem("Run on Login", "Start MouseKeys when you log in")
 	if autostart.IsEnabled() {
 		mRunOnLogin.Check()
@@ -402,6 +468,19 @@ func onReady() {
 			} else {
 				mStatus.SetTitle("○ Inactive")
 				systray.SetTitle("⌨️")
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			<-mAcceleration.ClickedCh
+			if mAcceleration.Checked() {
+				accelerationEnabled = false
+				mAcceleration.Uncheck()
+			} else {
+				accelerationEnabled = true
+				mAcceleration.Check()
 			}
 		}
 	}()
