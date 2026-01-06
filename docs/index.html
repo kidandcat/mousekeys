@@ -949,7 +949,11 @@
         const baseSpeed = 1;
         const maxSpeed = 16;
         const accelerationRate = 0.25;
+        const decelerationRate = 0.92; // Friction multiplier (0-1, lower = faster stop)
+        const stopThreshold = 0.1; // Stop when velocity below this
         let currentSpeed = baseSpeed;
+        let velocityX = 0;
+        let velocityY = 0;
         const diagonalFactor = 0.707;
         const activeKeys = new Set();
         let animationFrame = null;
@@ -1097,28 +1101,36 @@
         }
 
         // Move mouse
-        function moveBy(dx, dy) {
+        function moveBy(dx, dy, isCoasting = false) {
             const maxX = mouseArea.offsetWidth - 24;
             const maxY = mouseArea.offsetHeight - 24;
 
-            // Check if direction changed - reset acceleration
-            if ((dx !== 0 || dy !== 0) && (Math.sign(dx) !== Math.sign(lastDirection.dx) || Math.sign(dy) !== Math.sign(lastDirection.dy))) {
-                currentSpeed = baseSpeed;
-            }
-            lastDirection = { dx, dy };
+            if (!isCoasting) {
+                // Check if direction changed - reset acceleration
+                if ((dx !== 0 || dy !== 0) && (Math.sign(dx) !== Math.sign(lastDirection.dx) || Math.sign(dy) !== Math.sign(lastDirection.dy))) {
+                    currentSpeed = baseSpeed;
+                }
+                lastDirection = { dx, dy };
 
-            // Apply acceleration
-            if (dx !== 0 || dy !== 0) {
-                currentSpeed = Math.min(maxSpeed, currentSpeed + accelerationRate);
+                // Apply acceleration
+                if (dx !== 0 || dy !== 0) {
+                    currentSpeed = Math.min(maxSpeed, currentSpeed + accelerationRate);
+                }
+
+                // Apply diagonal normalization
+                if (dx !== 0 && dy !== 0) {
+                    dx *= diagonalFactor;
+                    dy *= diagonalFactor;
+                }
+
+                // Update velocity based on input
+                velocityX = dx * currentSpeed;
+                velocityY = dy * currentSpeed;
             }
 
-            if (dx !== 0 && dy !== 0) {
-                dx *= diagonalFactor;
-                dy *= diagonalFactor;
-            }
             const oldX = mouseX, oldY = mouseY;
-            mouseX = Math.max(0, Math.min(maxX, mouseX + dx * currentSpeed));
-            mouseY = Math.max(0, Math.min(maxY, mouseY + dy * currentSpeed));
+            mouseX = Math.max(0, Math.min(maxX, mouseX + velocityX));
+            mouseY = Math.max(0, Math.min(maxY, mouseY + velocityY));
             if (oldX !== mouseX || oldY !== mouseY) createTrail(mouseX, mouseY);
             updatePointer();
         }
@@ -1157,8 +1169,30 @@
                     dy += parseInt(keyEl.dataset.dy);
                 }
             });
-            if (dx !== 0 || dy !== 0) moveBy(dx, dy);
-            if (activeKeys.size > 0) animationFrame = requestAnimationFrame(animate);
+
+            if (activeKeys.size > 0) {
+                // Keys held - accelerate in direction
+                moveBy(dx, dy);
+                animationFrame = requestAnimationFrame(animate);
+            } else {
+                // No keys - coast with deceleration
+                velocityX *= decelerationRate;
+                velocityY *= decelerationRate;
+
+                // Check if we should stop
+                if (Math.abs(velocityX) < stopThreshold && Math.abs(velocityY) < stopThreshold) {
+                    velocityX = 0;
+                    velocityY = 0;
+                    currentSpeed = baseSpeed;
+                    lastDirection = { dx: 0, dy: 0 };
+                    animationFrame = null;
+                    return;
+                }
+
+                // Continue moving with current velocity
+                moveBy(0, 0, true);
+                animationFrame = requestAnimationFrame(animate);
+            }
         }
 
         // Show context menu
@@ -1266,15 +1300,8 @@
             const action = keyEl.dataset.action;
             if (action === 'leftClick') handleClickRelease();
 
-            // Reset acceleration when all movement keys released
-            if (activeKeys.size === 0) {
-                currentSpeed = baseSpeed;
-                lastDirection = { dx: 0, dy: 0 };
-                if (animationFrame) {
-                    cancelAnimationFrame(animationFrame);
-                    animationFrame = null;
-                }
-            }
+            // When all movement keys released, let deceleration handle stopping
+            // Animation loop will continue and apply deceleration
         }
 
         // Setup key events (called after intro)
