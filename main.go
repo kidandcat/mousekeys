@@ -10,44 +10,30 @@ import (
 )
 
 const (
-	baseSpeed        = 1.5   // Slow start for precision
-	maxSpeed         = 100.0 // Max speed
-	accelTime        = 0.25  // Time to reach max speed
-	precisionTime    = 0.05  // First 50ms stays slow for precision
-	tickInterval     = 16 * time.Millisecond
-	scrollAmount     = 50
-	decelerationRate = 0.72  // Friction multiplier per tick (0-1, lower = faster stop)
-	stopThreshold    = 0.5   // Stop when velocity below this
+	slowSpeed     = 2.0   // Precision speed (shift or first 150ms)
+	normalSpeed   = 15.0  // Normal speed
+	precisionTime = 0.15  // 150ms precision phase
+	tickInterval  = 16 * time.Millisecond
+	scrollAmount  = 50
 )
 
 type MouseController struct {
 	mu            sync.Mutex
 	active        bool
 	moveStartTime time.Time
-	lastDirX      float64
-	lastDirY      float64
 
 	keyW, keyA, keyS, keyD bool
 	keyQ, keyE, keyZ, keyX bool
 
-	leftDown bool
-
-	// Velocity for deceleration
-	velocityX float64
-	velocityY float64
-
-	// Saved velocity for deceleration (only used when all keys released)
-	savedVelocityX  float64
-	savedVelocityY  float64
-	hadDiagonal     bool // Track if we had diagonal movement
-	prevHadInput    bool // Track if previous frame had any input
+	leftDown  bool
+	shiftDown bool // Slow movement modifier
 }
 
 var (
-	mc                  *MouseController
-	hook                KeyboardHook
-	autostart           Autostart
-	accelerationEnabled = true
+	mc              *MouseController
+	hook            KeyboardHook
+	autostart       Autostart
+	speedMultiplier = 1.0
 )
 
 func NewMouseController() *MouseController {
@@ -68,7 +54,14 @@ func (mc *MouseController) Toggle() {
 		}
 		mc.keyW, mc.keyA, mc.keyS, mc.keyD = false, false, false, false
 		mc.keyQ, mc.keyE, mc.keyZ, mc.keyX = false, false, false, false
+		mc.shiftDown = false
 	}
+}
+
+func (mc *MouseController) SetShiftState(pressed bool) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	mc.shiftDown = pressed
 }
 
 func (mc *MouseController) IsActive() bool {
@@ -121,7 +114,8 @@ func (mc *MouseController) HandleKeyDownByKey(key Key) bool {
 		robotgo.Click("right", false)
 		return true
 	case KeyMiddleClick:
-		robotgo.Click("center", false)
+		// Shift is now slow movement modifier
+		mc.shiftDown = true
 		return true
 	case KeyScrollUp:
 		robotgo.Scroll(0, scrollAmount)
@@ -173,7 +167,11 @@ func (mc *MouseController) HandleKeyUpByKey(key Key) bool {
 			mc.leftDown = false
 		}
 		return true
-	case KeyRightClick, KeyMiddleClick, KeyScrollUp, KeyScrollDown:
+	case KeyMiddleClick:
+		// Shift released - stop slow movement
+		mc.shiftDown = false
+		return true
+	case KeyRightClick, KeyScrollUp, KeyScrollDown:
 		return true
 	}
 	return false
@@ -235,8 +233,6 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 	defer mc.mu.Unlock()
 
 	if !mc.active {
-		mc.velocityX = 0
-		mc.velocityY = 0
 		return 0, 0
 	}
 
@@ -271,128 +267,35 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 		inputY += 0.707
 	}
 
-	// Check if we have diagonal input
-	isDiagonal := inputX != 0 && inputY != 0
-
-	// Keys are pressed - accelerate
-	if inputX != 0 || inputY != 0 {
-		// Save velocity only when we have diagonal movement
-		if isDiagonal {
-			mc.savedVelocityX = mc.velocityX
-			mc.savedVelocityY = mc.velocityY
-			mc.hadDiagonal = true
-		} else if mc.hadDiagonal {
-			// Direction changed from diagonal to single axis - clear saved velocity
-			mc.savedVelocityX = 0
-			mc.savedVelocityY = 0
-			mc.hadDiagonal = false
-		}
-
-		dirX, dirY := 0.0, 0.0
-		if inputX > 0 {
-			dirX = 1
-		} else if inputX < 0 {
-			dirX = -1
-		}
-		if inputY > 0 {
-			dirY = 1
-		} else if inputY < 0 {
-			dirY = -1
-		}
-
-		// Only start timing when we begin moving
-		if mc.moveStartTime.IsZero() {
-			mc.moveStartTime = time.Now()
-		} else if dirX != mc.lastDirX || dirY != mc.lastDirY {
-			// Direction changed - halve the accumulated time (halves the speed)
-			elapsed := time.Since(mc.moveStartTime)
-			mc.moveStartTime = time.Now().Add(-elapsed / 2)
-		}
-		mc.lastDirX, mc.lastDirY = dirX, dirY
-
-		elapsed := time.Since(mc.moveStartTime).Seconds()
-
-		var speed float64
-		var effectiveMaxSpeed, effectiveAccelTime, effectivePrecisionTime float64
-
-		if !accelerationEnabled {
-			// Subtle acceleration: smaller range, faster times
-			effectiveMaxSpeed = 50.0
-			effectiveAccelTime = 0.1
-			effectivePrecisionTime = 0.03
-		} else {
-			effectiveMaxSpeed = maxSpeed
-			effectiveAccelTime = accelTime
-			effectivePrecisionTime = precisionTime
-		}
-
-		// Custom acceleration curve: slow precision phase, then fast acceleration
-		if elapsed < effectivePrecisionTime {
-			// Precision phase: stay at base speed
-			speed = baseSpeed
-		} else {
-			// Acceleration phase: exponential curve for faster ramp-up
-			accelElapsed := elapsed - effectivePrecisionTime
-			progress := accelElapsed / effectiveAccelTime
-			if progress > 1 {
-				progress = 1
-			}
-			// Use quadratic curve for faster acceleration feel
-			progress = progress * progress
-			speed = baseSpeed + (effectiveMaxSpeed-baseSpeed)*progress
-		}
-
-		// Normalize diagonal
-		if isDiagonal {
-			inputX *= 0.707
-			inputY *= 0.707
-		}
-
-		// Update velocity
-		mc.velocityX = inputX * speed
-		mc.velocityY = inputY * speed
-		mc.prevHadInput = true
-
-		return mc.velocityX, mc.velocityY
-	}
-
-	// No keys pressed - decelerate
-	// Restore saved diagonal velocity only when transitioning from input to no input
-	if mc.prevHadInput && mc.hadDiagonal && (mc.savedVelocityX != 0 || mc.savedVelocityY != 0) {
-		mc.velocityX = mc.savedVelocityX
-		mc.velocityY = mc.savedVelocityY
-	}
-	mc.savedVelocityX = 0
-	mc.savedVelocityY = 0
-	mc.hadDiagonal = false
-	mc.prevHadInput = false
-
-	mc.moveStartTime = time.Time{}
-	mc.lastDirX, mc.lastDirY = 0, 0
-
-	// Apply friction (faster when acceleration disabled)
-	effectiveDecel := decelerationRate
-	if !accelerationEnabled {
-		effectiveDecel = 0.5 // Much faster deceleration
-	}
-	mc.velocityX *= effectiveDecel
-	mc.velocityY *= effectiveDecel
-
-	// Stop if below threshold
-	if abs(mc.velocityX) < stopThreshold && abs(mc.velocityY) < stopThreshold {
-		mc.velocityX = 0
-		mc.velocityY = 0
+	// No movement
+	if inputX == 0 && inputY == 0 {
+		mc.moveStartTime = time.Time{}
 		return 0, 0
 	}
 
-	return mc.velocityX, mc.velocityY
-}
-
-func abs(x float64) float64 {
-	if x < 0 {
-		return -x
+	// Start timing when we begin moving
+	if mc.moveStartTime.IsZero() {
+		mc.moveStartTime = time.Now()
 	}
-	return x
+
+	elapsed := time.Since(mc.moveStartTime).Seconds()
+
+	// Speed selection: slow if shift held or in precision phase
+	var speed float64
+	if mc.shiftDown || elapsed < precisionTime {
+		speed = slowSpeed
+	} else {
+		speed = normalSpeed
+	}
+	speed *= speedMultiplier
+
+	// Normalize diagonal
+	if inputX != 0 && inputY != 0 {
+		inputX *= 0.707
+		inputY *= 0.707
+	}
+
+	return inputX * speed, inputY * speed
 }
 
 func (mc *MouseController) RunLoop() {
@@ -450,8 +353,15 @@ func onReady() {
 	mStatus := systray.AddMenuItem("Inactive", "Current status")
 	mStatus.Disable()
 	systray.AddSeparator()
-	mAcceleration := systray.AddMenuItem("Acceleration", "Toggle mouse acceleration")
-	mAcceleration.Check()
+
+	// Speed submenu
+	mSpeed := systray.AddMenuItem("Speed: Normal", "Adjust mouse speed")
+	mSpeedSlow := mSpeed.AddSubMenuItem("Slow (50%)", "Half speed")
+	mSpeedMedium := mSpeed.AddSubMenuItem("Medium (75%)", "Medium speed")
+	mSpeedNormal := mSpeed.AddSubMenuItem("Normal (100%)", "Default speed")
+	mSpeedNormal.Check()
+	mSpeedFast := mSpeed.AddSubMenuItem("Fast (150%)", "Faster speed")
+
 	mRunOnLogin := systray.AddMenuItem("Run on Login", "Start MouseKeys when you log in")
 	if autostart.IsEnabled() {
 		mRunOnLogin.Check()
@@ -472,15 +382,37 @@ func onReady() {
 		}
 	}()
 
+	// Speed selection handlers
+	uncheckAllSpeeds := func() {
+		mSpeedSlow.Uncheck()
+		mSpeedMedium.Uncheck()
+		mSpeedNormal.Uncheck()
+		mSpeedFast.Uncheck()
+	}
+
 	go func() {
 		for {
-			<-mAcceleration.ClickedCh
-			if mAcceleration.Checked() {
-				accelerationEnabled = false
-				mAcceleration.Uncheck()
-			} else {
-				accelerationEnabled = true
-				mAcceleration.Check()
+			select {
+			case <-mSpeedSlow.ClickedCh:
+				speedMultiplier = 0.5
+				uncheckAllSpeeds()
+				mSpeedSlow.Check()
+				mSpeed.SetTitle("Speed: Slow")
+			case <-mSpeedMedium.ClickedCh:
+				speedMultiplier = 0.75
+				uncheckAllSpeeds()
+				mSpeedMedium.Check()
+				mSpeed.SetTitle("Speed: Medium")
+			case <-mSpeedNormal.ClickedCh:
+				speedMultiplier = 1.0
+				uncheckAllSpeeds()
+				mSpeedNormal.Check()
+				mSpeed.SetTitle("Speed: Normal")
+			case <-mSpeedFast.ClickedCh:
+				speedMultiplier = 1.5
+				uncheckAllSpeeds()
+				mSpeedFast.Check()
+				mSpeed.SetTitle("Speed: Fast")
 			}
 		}
 	}()

@@ -190,9 +190,12 @@ func eventCallback(proxy C.CGEventTapProxy, eventType C.CGEventType, event C.CGE
 			}
 			if keycode == darwinKeyLShift {
 				if flags&(1<<17) != 0 { // Shift pressed
-					if darwinEventChan != nil {
-						darwinEventChan <- evt
-					}
+					evt.EventType = KeyDown
+				} else { // Shift released
+					evt.EventType = KeyUp
+				}
+				if darwinEventChan != nil {
+					darwinEventChan <- evt
 				}
 				return C.CGEventRef(0)
 			}
