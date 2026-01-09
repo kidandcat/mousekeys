@@ -25,8 +25,7 @@ type MouseController struct {
 	keyW, keyA, keyS, keyD bool
 	keyQ, keyE, keyZ, keyX bool
 
-	leftDown  bool
-	shiftDown bool // Slow movement modifier
+	leftDown bool
 }
 
 var (
@@ -54,14 +53,7 @@ func (mc *MouseController) Toggle() {
 		}
 		mc.keyW, mc.keyA, mc.keyS, mc.keyD = false, false, false, false
 		mc.keyQ, mc.keyE, mc.keyZ, mc.keyX = false, false, false, false
-		mc.shiftDown = false
 	}
-}
-
-func (mc *MouseController) SetShiftState(pressed bool) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	mc.shiftDown = pressed
 }
 
 func (mc *MouseController) IsActive() bool {
@@ -114,8 +106,7 @@ func (mc *MouseController) HandleKeyDownByKey(key Key) bool {
 		robotgo.Click("right", false)
 		return true
 	case KeyMiddleClick:
-		// Shift is now slow movement modifier
-		mc.shiftDown = true
+		robotgo.Click("center", false)
 		return true
 	case KeyScrollUp:
 		robotgo.Scroll(0, scrollAmount)
@@ -168,8 +159,6 @@ func (mc *MouseController) HandleKeyUpByKey(key Key) bool {
 		}
 		return true
 	case KeyMiddleClick:
-		// Shift released - stop slow movement
-		mc.shiftDown = false
 		return true
 	case KeyRightClick, KeyScrollUp, KeyScrollDown:
 		return true
@@ -280,9 +269,9 @@ func (mc *MouseController) GetMovement() (dx, dy float64) {
 
 	elapsed := time.Since(mc.moveStartTime).Seconds()
 
-	// Speed selection: slow if shift held or in precision phase
+	// Speed selection: slow during precision phase, then normal
 	var speed float64
-	if mc.shiftDown || elapsed < precisionTime {
+	if elapsed < precisionTime {
 		speed = slowSpeed
 	} else {
 		speed = normalSpeed
